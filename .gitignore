@@ -1,0 +1,9 @@
+*.o
+roundtrip
+bcast
+*.xml
+*.txt
+matmul
+__pycache__
+.ipynb_checkpoints
+broadcast
