@@ -8,7 +8,7 @@
   each leaf switch by two cables -->
 
   <AS id="AS0" routing="Full">
-    <cluster id="bob_cluster" prefix="node-" suffix=".acme.org" radical="0-15" speed="1Gf" bw="125MBps" lat="50us" 
+    <cluster id="bob_cluster" prefix="host-" suffix=".hawaii.edu" radical="0-15" speed="1Gf" bw="125MBps" lat="50us"
              topology="FAT_TREE" topo_parameters="2;4,4;1,2;1,2" loopback_bw="100MBps" loopback_lat="0"/>
   </AS>
 </platform>
