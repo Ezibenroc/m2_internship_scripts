@@ -78,13 +78,13 @@ int my_sqrt(int n) {
 }
 
 float *allocate_matrix(int size) {
-    float *matrix = (float*) malloc(sizeof(float*)*size*size);
+    float *matrix = (float*) SMPI_SHARED_MALLOC(sizeof(float*)*size*size);
     assert(matrix);
     return matrix;
 }
 
 void free_matrix(float *matrix, int size) {
-    free(matrix);
+    SMPI_SHARED_FREE(matrix);
 }
 
 inline void matrix_copy(float *dest, const float *src, int size) {
@@ -154,7 +154,7 @@ bool matrix_equal(float *matrix_A, float *matrix_B, int size, float epsilon) {
 }
 
 void sequential_matrix_product(float *A, float *B, float *C, int size) {
-    for(int i = 0 ; i < size ; i++) {
+    for(int i = 0 ; i < size ; i++) SMPI_SAMPLE_GLOBAL(0.5*size, 0.01) {
         for(int j = 0 ; j < size ; j++) {
             for(int k = 0 ; k < size ; k++) {
                 float a = matrix_get(A, size, i, k);
