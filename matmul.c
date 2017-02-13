@@ -167,7 +167,7 @@ void sequential_matrix_product(float *A, float *B, float *C, int size) {
 }
 
 void matrix_product(float *A, float *B, float *C, int size, int global_size, int proc_i, int proc_j, int sqrt_num_procs) {
-    float communication_time = 0, computation_time = 0, tmp_time;
+    double communication_time = 0, computation_time = 0, tmp_time;
     float *A_buff = allocate_matrix(size);
     float *B_buff = allocate_matrix(size);
     float *A_send, *B_send;
