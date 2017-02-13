@@ -103,12 +103,14 @@ inline float matrix_get(float *matrix, int size, int i, int j) {
 float *init_matrix_A(int size, int proc_i, int proc_j) {
     int global_i, global_j;
     float *matrix = allocate_matrix(size);
+    /*
     for(int i = 0 ; i < size ; i++) {
         for(int j = 0 ; j < size ; j++) {
             local_to_global(i, j, &global_i, &global_j, proc_i, proc_j, size);
             matrix_set(matrix, size, i, j, global_i);
         }
     }
+    */
     return matrix;
 }
 
@@ -116,18 +118,22 @@ float *init_matrix_A(int size, int proc_i, int proc_j) {
 float *init_matrix_B(int size, int proc_i, int proc_j) {
     int global_i, global_j;
     float *matrix = allocate_matrix(size);
+    /*
     for(int i = 0 ; i < size ; i++) {
         for(int j = 0 ; j < size ; j++) {
             local_to_global(i, j, &global_i, &global_j, proc_i, proc_j, size);
             matrix_set(matrix, size, i, j, global_i+global_j);
         }
     }
+    */
     return matrix;
 }
 
 float *init_matrix_C(int size) {
     float *matrix = allocate_matrix(size);
+    /*
     memset(matrix, 0, size*size*sizeof(float));
+    */
     return matrix;
 }
 
