@@ -48,13 +48,13 @@ def check(matrix_sizes, number_procs):
                 print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
                 sys.exit(1)
 
-def run_all(global_csv_writer, local_csv_writer):
-    i = 0
-    while True:
-        print('Iteration %d' % i)
-        i += 1
-        try:
-            nb_roots = random.randint(1, 24)
+def run_all(global_csv_writer, local_csv_writer, nb_iter):
+    for i in range(1, nb_iter+1):
+        print('Iteration %d/%d' % (i, nb_iter))
+        values = list(range(1, 25))
+        random.shuffle(values)
+        for j, nb_roots in enumerate(values):
+            print('\tSub-iteration %d/%d' % (j+1, len(values)))
             tree = FatTree([24, 48], [1, nb_roots], [1, 1])
             tree.dump_topology_file('topo.xml')
             tree.dump_host_file('host.txt')
@@ -62,17 +62,16 @@ def run_all(global_csv_writer, local_csv_writer):
             global_csv_writer.writerow((nb_roots, global_result.time))
             for local_res in sorted(local_result):
                 local_csv_writer.writerow((nb_roots, *local_res))
-        except KeyboardInterrupt:
-            break
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        sys.stderr.write('Syntax: %s <global csv> <local csv>\n' % sys.argv[0])
+    if len(sys.argv) != 4:
+        sys.stderr.write('Syntax: %s <global csv> <local csv> <nb_iterations>\n' % sys.argv[0])
         sys.exit(1)
+    nb_iter = int(sys.argv[3])
     with open(sys.argv[1], 'w') as f_global:
         with open(sys.argv[2], 'w') as f_local:
             global_writer = csv.writer(f_global)
             global_writer.writerow(('nb_root_switches', 'time'))
             local_writer = csv.writer(f_local)
             local_writer.writerow(('nb_root_switches', 'rank', 'communication_time', 'computation_time'))
-            run_all(global_writer, local_writer)
+            run_all(global_writer, local_writer, nb_iter)
