@@ -11,7 +11,7 @@ from collections import namedtuple
 from topology import FatTree
 
 MATRIX_SIZE = 6600
-NB_PROCS = 1089
+NB_PROCS = 576
 
 def run_algorithm(topo_file, host_file, number_processes, matrix_size):
     args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(number_processes), '-hostfile', host_file, '-platform', topo_file, './matmul', str(matrix_size)]
