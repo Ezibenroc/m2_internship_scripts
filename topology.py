@@ -5,7 +5,7 @@ class FatTree:
 
     prefix = 'host-'
     suffix = '.hawaii.edu'
-    speed = '1GF'
+    speed = '1Gf'
     bw = '125MBps'
     lat = '50us'
     loopback_bw = '100MBps'
@@ -57,12 +57,12 @@ class FatTree:
             (len(self.down), self.nb_nodes())))
         AS = etree.SubElement(platform, 'AS')
         AS.set('id', 'AS0')
-        AS.set('routing', 'full') # TODO may need to change routing
+        AS.set('routing', 'Full') # TODO may need to change routing
         cluster = etree.SubElement(AS, 'cluster')
         cluster.set('id', 'cluster0')
         cluster.set('prefix', self.prefix)
         cluster.set('suffix', self.suffix)
-        cluster.set('radical', '0-%d' % self.nb_nodes())
+        cluster.set('radical', '0-%d' % (self.nb_nodes()-1))
         cluster.set('speed', self.speed)
         cluster.set('bw', self.bw)
         cluster.set('lat', self.lat)
@@ -73,7 +73,10 @@ class FatTree:
         return etree.ElementTree(platform)
 
     def dump_topology_file(self, file_name):
-        self.to_xml().write(file_name, xml_declaration=True, pretty_print=True)
+        with open(file_name, 'wb') as f:
+            string = etree.tostring(self.to_xml(), xml_declaration=True, pretty_print=True,
+                    doctype='<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">')
+            f.write(string)
 
     def dump_host_file(self, file_name):
         pattern = self.prefix + '%d' + self.suffix + '\n'
