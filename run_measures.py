@@ -8,6 +8,10 @@ from math import floor, sqrt
 import csv
 import os
 from collections import namedtuple
+from topology import FatTree
+
+MATRIX_SIZE = 6600
+NB_PROCS = 1089
 
 def run_algorithm(topo_file, host_file, number_processes, matrix_size):
     args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(number_processes), '-hostfile', host_file, '-platform', topo_file, './matmul', str(matrix_size)]
@@ -44,36 +48,31 @@ def check(matrix_sizes, number_procs):
                 print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
                 sys.exit(1)
 
-def run_all(global_csv_writer, local_csv_writer, matrix_sizes, number_procs):
+def run_all(global_csv_writer, local_csv_writer):
     i = 0
     while True:
         print('Iteration %d' % i)
         i += 1
         try:
-            for size in matrix_sizes:
-                print('\t%d size' % size)
-                for nb_proc in number_procs:
-                    print('\t\t%d processors' % nb_proc)
-                    global_result, local_result = run_and_parse('./cluster_1600.xml', './hostfile_1600.txt', nb_proc, size)
-                    global_csv_writer.writerow(global_result)
-                    for local_result in sorted(local_result):
-                        local_csv_writer.writerow((global_result.nb_proc, global_result.matrix_size, *local_result))
+            nb_roots = random.randint(1, 24)
+            tree = FatTree([24, 48], [1, nb_roots], [1, 1])
+            tree.dump_topology_file('topo.xml')
+            tree.dump_host_file('host.txt')
+            global_result, local_result = run_and_parse('./topo.xml', './host.txt', NB_PROCS, MATRIX_SIZE)
+            global_csv_writer.writerow((nb_roots, global_result.time))
+            for local_res in sorted(local_result):
+                local_csv_writer.writerow((nb_roots, *local_res))
         except KeyboardInterrupt:
             break
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        print('Syntax: %s <global result file> <local result file> <matrix sizes> <numbers of processors>' % sys.argv[0])
+    if len(sys.argv) != 3:
+        sys.stderr.write('Syntax: %s <global csv> <local csv>\n' % sys.argv[0])
         sys.exit(1)
-    matrix_sizes = [int(n) for n in sys.argv[3].split(',')]
-    number_procs = [int(n) for n in sys.argv[4].split(',')]
-    check(matrix_sizes, number_procs)
-    print('Will use matrices of size      : %s' % matrix_sizes)
-    print('Will use numbers of processors : %s' % number_procs)
     with open(sys.argv[1], 'w') as f_global:
         with open(sys.argv[2], 'w') as f_local:
             global_writer = csv.writer(f_global)
-            global_writer.writerow(('nb_proc', 'matrix_size', 'time'))
+            global_writer.writerow(('nb_root_switches', 'time'))
             local_writer = csv.writer(f_local)
-            local_writer.writerow(('nb_proc', 'matrix_size', 'rank', 'communication_time', 'computation_time'))
-            run_all(global_writer, local_writer, matrix_sizes, number_procs)
+            local_writer.writerow(('nb_root_switches', 'rank', 'communication_time', 'computation_time'))
+            run_all(global_writer, local_writer)
