@@ -62,6 +62,20 @@ def run_all(global_csv_writer, local_csv_writer, args):
                 local_csv_writer.writerow((tree, tree.nb_roots(), args.nb_proc,
                     args.size, *local_res))
 
+def check_params(args):
+    sqrt_proc = int(sqrt(args.nb_proc))
+    if sqrt_proc*sqrt_proc != args.nb_proc:
+        print('Error: %d is not a square.' % args.nb_proc)
+        sys.exit(1)
+    if args.size%sqrt_proc != 0:
+        print('Error: sqrt(%d) does not divide %d.' % (args.nb_proc, args.size))
+        sys.exit(1)
+    tree_min_nodes = min(args.fat_tree, key = lambda t: t.nb_nodes())
+    min_nodes = tree_min_nodes.nb_nodes()
+    if min_nodes < args.nb_proc:
+        print('Error: more processes than nodes for at least one of the fat-trees (fat-tree %s has  %d nodes, asked for %d processes).' % (tree_min_nodes, min_nodes, args.nb_proc))
+        sys.exit(1)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Experiment runner')
@@ -79,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
             help='Description of the fat tree(s).')
     args = parser.parse_args()
-    #check_params(args)
+    check_params(args)
     with open(args.global_csv, 'w') as f_global:
         with open(args.local_csv, 'w') as f_local:
             global_writer = csv.writer(f_global)
