@@ -7,11 +7,9 @@ import re
 from math import floor, sqrt
 import csv
 import os
+import argparse
 from collections import namedtuple
 from topology import FatTreeParser
-
-MATRIX_SIZE = 400#6600
-NB_PROCS = 16#1089
 
 def run_algorithm(topo_file, host_file, number_processes, matrix_size):
     args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(number_processes), '-hostfile', host_file, '-platform', topo_file, './matmul', str(matrix_size)]
@@ -48,29 +46,44 @@ def check(matrix_sizes, number_procs):
                 print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
                 sys.exit(1)
 
-def run_all(global_csv_writer, local_csv_writer, nb_iter, trees):
-    for i in range(1, nb_iter+1):
-        print('Iteration %d/%d' % (i, nb_iter))
-        random.shuffle(trees)
-        for j, tree in enumerate(trees):
-            print('\tSub-iteration %d/%d' % (j+1, len(trees)))
+def run_all(global_csv_writer, local_csv_writer, args):
+    for i in range(1, args.nb_runs+1):
+        print('Iteration %d/%d' % (i, args.nb_runs))
+        random.shuffle(args.fat_tree)
+        for j, tree in enumerate(args.fat_tree):
+            print('\tSub-iteration %d/%d' % (j+1, len(args.fat_tree)))
             tree.dump_topology_file('topo.xml')
             tree.dump_host_file('host.txt')
-            global_result, local_result = run_and_parse('./topo.xml', './host.txt', NB_PROCS, MATRIX_SIZE)
-            global_csv_writer.writerow((tree, tree.nb_roots(), global_result.time))
+            global_result, local_result = run_and_parse('./topo.xml', './host.txt',
+                    args.nb_proc, args.size)
+            global_csv_writer.writerow((tree, tree.nb_roots(), args.nb_proc, args.size,
+                global_result.time))
             for local_res in sorted(local_result):
-                local_csv_writer.writerow((tree, tree.nb_roots(), *local_res))
+                local_csv_writer.writerow((tree, tree.nb_roots(), args.nb_proc,
+                    args.size, *local_res))
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        sys.stderr.write('Syntax: %s <global csv> <local csv> <nb_iterations> <fat_tree(s)_description>\n' % sys.argv[0])
-        sys.exit(1)
-    nb_iter = int(sys.argv[3])
-    trees = FatTreeParser.parse(sys.argv[4])
-    with open(sys.argv[1], 'w') as f_global:
-        with open(sys.argv[2], 'w') as f_local:
+    parser = argparse.ArgumentParser(
+            description='Experiment runner')
+    parser.add_argument('-n', '--nb_runs', type=int,
+            default=10, help='Number of experiments to perform.')
+    required_named = parser.add_argument_group('required named arguments')
+    required_named.add_argument('--size', type = int,
+            required=True, help='Sizes of the matrix')
+    parser.add_argument('--nb_proc', type = int,
+            help='Number of processes to use.')
+    required_named.add_argument('--global_csv', type = str,
+            required=True, help='Path of the global CSV file.')
+    required_named.add_argument('--local_csv', type = str,
+            required=True, help='Path of the local CSV file.')
+    parser.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
+            help='Description of the fat tree(s).')
+    args = parser.parse_args()
+    #check_params(args)
+    with open(args.global_csv, 'w') as f_global:
+        with open(args.local_csv, 'w') as f_local:
             global_writer = csv.writer(f_global)
-            global_writer.writerow(('fat_tree', 'nb_roots', 'time'))
+            global_writer.writerow(('fat_tree', 'nb_roots', 'nb_proc', 'size', 'time'))
             local_writer = csv.writer(f_local)
-            local_writer.writerow(('fat_tree', 'nb_roots', 'rank', 'communication_time', 'computation_time'))
-            run_all(global_writer, local_writer, nb_iter, trees)
+            local_writer.writerow(('fat_tree', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
+            run_all(global_writer, local_writer, args)
