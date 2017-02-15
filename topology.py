@@ -1,8 +1,54 @@
 import functools
 from lxml import etree
 
-class FatTree:
+class ParseError(Exception):
+    pass
 
+class Parser:
+    out_separator = ';'
+    in_separator = ','
+    range_separator = ':'
+
+    @classmethod
+    def parse(cls, description):
+        blocks = description.split(cls.out_separator)
+        sub_blocks = [block.split(cls.in_separator) for block in blocks]
+        for i in range(len(sub_blocks)):
+            sub_blocks[i] = [cls.parse_range(elt) for elt in sub_blocks[i]]
+            if(len(sub_blocks[i]) == 1):
+                sub_blocks[i] = sub_blocks[i][0]
+        return sub_blocks
+
+    @classmethod
+    def parse_range(cls, description):
+        error = False
+        splitted = description.split(cls.range_separator)
+        if len(splitted) == 1:
+            result = cls.parse_int(splitted[0])
+        elif len(splitted) == 2:
+            result = cls.parse_int(splitted[0]), cls.parse_int(splitted[1])
+            if result[0] > result[1]:
+                error = True
+        else:
+            error = True
+        if error:
+            raise ParseError('Wrong range: %s' % description)
+        else:
+            return result
+
+    @classmethod
+    def parse_int(cls, description):
+        error = False
+        try:
+            result = int(description)
+        except ValueError:
+            error = True
+        if error or result <= 0:
+            raise ParseError('Wrong integer: %s' % description)
+        else:
+            return result
+
+class FatTree:
     prefix = 'host-'
     suffix = '.hawaii.edu'
     speed = '1Gf'
