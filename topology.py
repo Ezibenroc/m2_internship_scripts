@@ -1,4 +1,5 @@
 import functools
+import itertools
 from lxml import etree
 
 class ParseError(Exception):
@@ -15,8 +16,6 @@ class Parser:
         sub_blocks = [block.split(cls.in_separator) for block in blocks]
         for i in range(len(sub_blocks)):
             sub_blocks[i] = [cls.parse_range(elt) for elt in sub_blocks[i]]
-            if(len(sub_blocks[i]) == 1):
-                sub_blocks[i] = sub_blocks[i][0]
         return sub_blocks
 
     @classmethod
@@ -25,9 +24,10 @@ class Parser:
         splitted = description.split(cls.range_separator)
         if len(splitted) == 1:
             result = cls.parse_int(splitted[0])
+            result = range(result, result+1)
         elif len(splitted) == 2:
-            result = cls.parse_int(splitted[0]), cls.parse_int(splitted[1])
-            if result[0] > result[1]:
+            result = range(cls.parse_int(splitted[0]), cls.parse_int(splitted[1])+1)
+            if len(result) == 0:
                 error = True
         else:
             error = True
@@ -47,6 +47,25 @@ class Parser:
             raise ParseError('Wrong integer: %s' % description)
         else:
             return result
+
+class FatTreeParser(Parser):
+    @classmethod
+    def parse(cls, description):
+        result = super().parse(description)
+        if len(result) != 4:
+            raise ParseError('A fat-tree description has exactly 4 parts.')
+        l, *descriptors = result
+        if len(l) != 1 or len(l[0]) != 1:
+            raise ParseError('The first part of a fat-tree description is an integer (number of levels).')
+        else:
+            l = l[0][0]
+        if any(len(sub) != l for sub in descriptors):
+            raise ParseError('One of the sub-lists has a length different than %d.' % l)
+        for i in range(len(descriptors)):
+            descriptors[i] = list(itertools.product(*descriptors[i]))
+        descriptors = itertools.product(*descriptors)
+        return [FatTree(*t) for t in descriptors]
+
 
 class FatTree:
     prefix = 'host-'
@@ -78,9 +97,17 @@ class FatTree:
         check_list(up)
         check_list(parallel)
         assert len(down) == len(up) == len(parallel)
-        self.down = down
-        self.up = up
-        self.parallel = parallel
+        self.down = tuple(down)
+        self.up = tuple(up)
+        self.parallel = tuple(parallel)
+
+    def __eq__(self, other):
+        return self.down == other.down and\
+            self.up == other.up and\
+            self.parallel == other.parallel
+
+    def __hash__(self):
+        return hash((self.down, self.up, self.parallel))
 
     def __str__(self):
         def intlist_to_str(l):
@@ -89,6 +116,9 @@ class FatTree:
         up = intlist_to_str(self.up)
         parallel = intlist_to_str(self.parallel)
         return ';'.join([str(len(self.down)), down, up, parallel])
+
+    def __repr__(self):
+        return str(self)
 
     def nb_nodes(self):
         return functools.reduce(lambda a, b: a*b, self.down, 1)
