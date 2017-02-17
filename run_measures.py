@@ -11,6 +11,39 @@ import argparse
 from collections import namedtuple
 from topology import FatTreeParser
 
+HPL_dat_text = '''HPLinpack benchmark input file
+Innovative Computing Laboratory, University of Tennessee
+HPL.out      output file name (if any)
+6            device out (6=stdout,7=stderr,file)
+1            # of problems sizes (N)
+{size}       # default: 29 30 34 35  Ns
+1            # default: 1            # of NBs
+120          # 1 2 3 4      NBs
+0            PMAP process mapping (0=Row-,1=Column-major)
+1            # of process grids (P x Q)
+{P}          Ps
+{Q}          Qs
+16.0         threshold
+3            # of panel fact
+0 1 2        PFACTs (0=left, 1=Crout, 2=Right)
+2            # of recursive stopping criterium
+2 4          NBMINs (>= 1)
+1            # of panels in recursion
+2            NDIVs
+3            # of recursive panel fact.
+0 1 2        RFACTs (0=left, 1=Crout, 2=Right)
+1            # of broadcast
+0            BCASTs (0=1rg,1=1rM,2=2rg,3=2rM,4=Lng,5=LnM)
+1            # of lookahead depth
+0            DEPTHs (>=0)
+2            SWAP (0=bin-exch,1=long,2=mix)
+64           swapping threshold
+0            L1 in (0=transposed,1=no-transposed) form
+0            U  in (0=transposed,1=no-transposed) form
+1            Equilibration (0=no,1=yes)
+8            memory alignment in double (> 0)
+'''
+
 class AbstractRunner:
 
     topo_file = 'topo.xml'
@@ -108,20 +141,65 @@ class MatrixProduct(AbstractRunner):
         super().sequel()
         self.local_csv_file.close()
 
+def primes(n):
+# From http://stackoverflow.com/questions/16996217/prime-factorization-list
+    primfac = []
+    d = 2
+    while d*d <= n:
+        while (n % d) == 0:
+            primfac.append(d)  # supposing you want multiple factors repeated
+            n //= d
+        d += 1
+    if n > 1:
+       primfac.append(n)
+    return primfac
+
 class HPL(AbstractRunner):
+
+    HPL_file_name = 'HPL.dat'
+
     def __init__(self, *args):
         super().__init__(*args)
-        self.args = self.default_args + ['../hpl-2.2/bin/SMPI/xhpl', str(self.size)]
+        self.args = self.default_args + ['../hpl-2.2/bin/SMPI/xhpl']
+
+    def get_P_Q(self):
+        factors = primes(self.nb_proc)
+        P, Q = 1, 1
+        for fact in factors:
+            if P < Q:
+                P *= fact
+            else:
+                Q *= fact
+        return P, Q
 
     def prequel(self):
         super().prequel()
-        # TODO generate HPL.dat
-        raise NotImplementedError()
+        P, Q = self.get_P_Q()
+        with open(self.HPL_file_name, 'w') as f:
+            f.write(HPL_dat_text.format(P=P, Q=Q, size=self.size))
 
-    def run(self):
-        output_str = self._run()
-        # TODO find the number of GFLOPS
-        raise NotImplementedError()
+    def run(self): # we parse the ugly output...
+        output_str = self._run().split(b'\n')
+        output = [sub.split() for sub in output_str]
+        for i, sub in enumerate(output_str):
+            if b'Time' in sub and b'Gflops' in sub:
+                break
+        sub = output[i+2]
+        error = False
+        try:
+            time = float(sub[-2])
+            flops = float(sub[-1])
+            if flops > self.nb_proc * 10: # generous here, each host has 1Gflops speed
+                print('!! GOT AN ANOMALY !!')
+                error = True # sometimes, for no reason, we get strange anomalies
+        except (ValueError, IndexError):
+            print('!! GOT AN EXCEPTION !!')
+            error = True # sometimes, for no apparent reason, HPL does not output this line...
+        if error:
+            print(b' '.join(sub))
+            return self.run()
+        else:
+            return time, flops
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -144,8 +222,14 @@ if __name__ == '__main__':
             choices = ['matrix_product', 'HPL'])
     args = parser.parse_args()
     if args.experiment == 'matrix_product':
+        if args.local_csv == None:
+            sys.stderr.write('Error: no local CSV file given.\n')
+            sys.exit(1)
         runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
     elif args.experiment == 'HPL':
+        if args.local_csv is not None:
+            sys.stderr.write('Error: no need for a local CSV file.\n')
+            sys.exit(1)
         runner = HPL(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv)
     else:
         assert False # unreachable
