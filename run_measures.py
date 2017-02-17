@@ -36,7 +36,7 @@ class AbstractRunner:
         self.check_params()
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time'))
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops'))
 
     def _run(self):
         p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
@@ -44,7 +44,7 @@ class AbstractRunner:
         assert p.wait() == 0
         return output[0]
 
-    def run(self): # return the time, in second
+    def run(self): # return the time (in second) and the speed (in Gflops)
         raise NotImplementedError()
 
     def sequel(self):
@@ -60,8 +60,8 @@ class AbstractRunner:
                 print('\tSub-iteration %d/%d' % (j+1, len(self.topologies)))
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
-                time = self.run()
-                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time))
+                time, flops = self.run()
+                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time, flops))
         self.sequel()
 
 class MatrixProduct(AbstractRunner):
@@ -100,7 +100,9 @@ class MatrixProduct(AbstractRunner):
         for local in self.local_regex.finditer(match.group('local')): # would be very nice if we could explore the regex hierarchy instead of having to do another match...
             self.local_csv_writer.writerow((self.current_topo, self.current_topo.nb_roots(), self.nb_proc, self.size,
                 int(local.group('rank')), float(local.group('communication_time')), float(local.group('computation_time'))))
-        return float(match.group('time'))
+        time = float(match.group('time'))
+        flops = 2*self.size**3 / (time*10**9)
+        return time, flops
 
     def sequel(self):
         super().sequel()
