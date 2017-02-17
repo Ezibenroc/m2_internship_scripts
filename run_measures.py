@@ -11,70 +11,100 @@ import argparse
 from collections import namedtuple
 from topology import FatTreeParser
 
-def run_algorithm(topo_file, host_file, number_processes, matrix_size):
-    args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(number_processes), '-hostfile', host_file, '-platform', topo_file, './matmul', str(matrix_size)]
-    p = Popen(args, stdout = PIPE, stderr = DEVNULL)
-    output = p.communicate()
-    assert p.wait() == 0
-    return output[0]
+class AbstractRunner:
 
-float_string = '[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
-local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
-global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
-whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
-local_regex = re.compile(local_time_string.encode())
-regex = re.compile(whole_string.encode())
+    topo_file = 'topo.xml'
+    host_file = 'host.txt'
 
-def run_and_parse(topo_file, host_file, number_processes, matrix_size):
-    output_str = run_algorithm(topo_file, host_file, number_processes, matrix_size)
-    match = regex.match(output_str)
-    global_result = namedtuple('global_result', ['nb_proc', 'matrix_size', 'time'])(int(match.group('nb_proc')), int(match.group('matrix_size')), float(match.group('time')))
-    local_result = []
-    local_tuple = namedtuple('local_result', ['rank', 'communication_time', 'computation_time'])
-    for local in local_regex.finditer(match.group('local')): # would be very nice if we could explore the regex hierarchy instead of having to do another match...
-        local_result.append(local_tuple(int(local.group('rank')), float(local.group('communication_time')), float(local.group('computation_time'))))
-    return global_result, local_result
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name):
+        self.topologies = topologies
+        self.size = size
+        self.nb_proc = nb_proc
+        self.nb_runs = nb_runs
+        self.csv_file_name = csv_file_name
+        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(self.nb_proc),
+                '-hostfile', self.host_file, '-platform', self.topo_file]
 
-def check(matrix_sizes, number_procs):
-    for nb_proc in number_procs:
-        sqrt_proc = int(sqrt(nb_proc))
-        if sqrt_proc*sqrt_proc != nb_proc:
-            print('Error: %d is not a square.' % nb_proc)
+    def check_params(self):
+        topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
+        min_nodes = topo_min_nodes.nb_nodes()
+        if min_nodes < self.nb_proc:
+            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_nodes, min_nodes, self.nb_proc))
             sys.exit(1)
-        for size in matrix_sizes:
-            if size%sqrt_proc != 0:
-                print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
-                sys.exit(1)
 
-def run_all(global_csv_writer, local_csv_writer, args):
-    for i in range(1, args.nb_runs+1):
-        print('Iteration %d/%d' % (i, args.nb_runs))
-        random.shuffle(args.fat_tree)
-        for j, tree in enumerate(args.fat_tree):
-            print('\tSub-iteration %d/%d' % (j+1, len(args.fat_tree)))
-            tree.dump_topology_file('topo.xml')
-            tree.dump_host_file('host.txt')
-            global_result, local_result = run_and_parse('./topo.xml', './host.txt',
-                    args.nb_proc, args.size)
-            global_csv_writer.writerow((tree, tree.nb_roots(), args.nb_proc, args.size,
-                global_result.time))
-            for local_res in sorted(local_result):
-                local_csv_writer.writerow((tree, tree.nb_roots(), args.nb_proc,
-                    args.size, *local_res))
+    def prequel(self):
+        self.check_params()
+        self.csv_file = open(self.csv_file_name, 'w')
+        self.csv_writer = csv.writer(self.csv_file)
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time'))
 
-def check_params(args):
-    sqrt_proc = int(sqrt(args.nb_proc))
-    if sqrt_proc*sqrt_proc != args.nb_proc:
-        print('Error: %d is not a square.' % args.nb_proc)
-        sys.exit(1)
-    if args.size%sqrt_proc != 0:
-        print('Error: sqrt(%d) does not divide %d.' % (args.nb_proc, args.size))
-        sys.exit(1)
-    tree_min_nodes = min(args.fat_tree, key = lambda t: t.nb_nodes())
-    min_nodes = tree_min_nodes.nb_nodes()
-    if min_nodes < args.nb_proc:
-        print('Error: more processes than nodes for at least one of the fat-trees (fat-tree %s has  %d nodes, asked for %d processes).' % (tree_min_nodes, min_nodes, args.nb_proc))
-        sys.exit(1)
+    def run(self): # return the time, in second
+        raise NotImplementedError()
+
+    def sequel(self):
+        self.csv_file.close()
+
+    def run_all(self):
+        self.prequel()
+        for i in range(1, self.nb_runs+1):
+            print('Iteration %d/%d' % (i, args.nb_runs))
+            random.shuffle(self.topologies)
+            for j, topo in enumerate(self.topologies):
+                self.current_topo = topo
+                print('\tSub-iteration %d/%d' % (j+1, len(self.topologies)))
+                topo.dump_topology_file(self.topo_file)
+                topo.dump_host_file(self.host_file)
+                time = self.run()
+                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time))
+        self.sequel()
+
+class MatrixProduct(AbstractRunner):
+
+    float_string = '[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
+    local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
+    global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
+    whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
+    local_regex = re.compile(local_time_string.encode())
+    regex = re.compile(whole_string.encode())
+
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, local_csv_file_name):
+        super().__init__(topologies, size, nb_proc, nb_runs, csv_file_name)
+        self.local_csv_file_name = local_csv_file_name
+        self.args = self.default_args + ['./matmul', str(self.size)]
+
+    def check_params(self):
+        super().check_params()
+        sqrt_proc = int(sqrt(self.nb_proc))
+        if sqrt_proc*sqrt_proc != self.nb_proc:
+            print('Error: %d is not a square.' % self.nb_proc)
+            sys.exit(1)
+        if self.size%sqrt_proc != 0:
+            print('Error: sqrt(%d) does not divide %d.' % (self.nb_proc, self.size))
+            sys.exit(1)
+
+    def prequel(self):
+        super().prequel()
+        self.local_csv_file = open(self.local_csv_file_name, 'w')
+        self.local_csv_writer = csv.writer(self.local_csv_file)
+        self.local_csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
+
+    def _run(self):
+        p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
+        output = p.communicate()
+        assert p.wait() == 0
+        return output[0]
+
+    def run(self):
+        output_str = self._run()
+        match = self.regex.match(output_str)
+        for local in self.local_regex.finditer(match.group('local')): # would be very nice if we could explore the regex hierarchy instead of having to do another match...
+            self.local_csv_writer.writerow((self.current_topo, self.current_topo.nb_roots(), self.nb_proc, self.size,
+                int(local.group('rank')), float(local.group('communication_time')), float(local.group('computation_time'))))
+        return float(match.group('time'))
+
+    def sequel(self):
+        super().sequel()
+        self.local_csv_file.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -93,11 +123,5 @@ if __name__ == '__main__':
     parser.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
             help='Description of the fat tree(s).')
     args = parser.parse_args()
-    check_params(args)
-    with open(args.global_csv, 'w') as f_global:
-        with open(args.local_csv, 'w') as f_local:
-            global_writer = csv.writer(f_global)
-            global_writer.writerow(('fat_tree', 'nb_roots', 'nb_proc', 'size', 'time'))
-            local_writer = csv.writer(f_local)
-            local_writer.writerow(('fat_tree', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
-            run_all(global_writer, local_writer, args)
+    runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
+    runner.run_all()
