@@ -106,6 +106,9 @@ class MatrixProduct(AbstractRunner):
         super().sequel()
         self.local_csv_file.close()
 
+class HPL(AbstractRunner):
+    pass
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Experiment runner')
@@ -113,15 +116,15 @@ if __name__ == '__main__':
             default=10, help='Number of experiments to perform.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--size', type = int,
-            required=True, help='Sizes of the matrix')
-    parser.add_argument('--nb_proc', type = int,
-            help='Number of processes to use.')
+            required=True, help='Sizes of the problem')
+    required_named.add_argument('--nb_proc', type = int,
+            required=True, help='Number of processes to use.')
     required_named.add_argument('--global_csv', type = str,
             required=True, help='Path of the global CSV file.')
     required_named.add_argument('--local_csv', type = str,
             required=True, help='Path of the local CSV file.')
-    parser.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
-            help='Description of the fat tree(s).')
+    required_named.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
+            required=True, help='Description of the fat tree(s).')
     args = parser.parse_args()
     runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
     runner.run_all()
