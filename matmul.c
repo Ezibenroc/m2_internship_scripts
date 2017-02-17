@@ -160,9 +160,9 @@ bool matrix_equal(float *matrix_A, float *matrix_B, int size, float epsilon) {
 }
 
 void sequential_matrix_product(float *A, float *B, float *C, int size) {
-    for(int i = 0 ; i < size ; i++) SMPI_SAMPLE_GLOBAL(0.5*size, 0.01) {
-        for(int j = 0 ; j < size ; j++) {
-            for(int k = 0 ; k < size ; k++) {
+    for(int k = 0 ; k < size ; k++) SMPI_SAMPLE_GLOBAL(0.5*size, 0.01) {
+        for(int i = 0 ; i < size ; i++) {
+            for(int j = 0 ; j < size ; j++) {
                 float a = matrix_get(A, size, i, k);
                 float b = matrix_get(B, size, k, j);
                 float c = matrix_get(C, size, i, j);
