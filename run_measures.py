@@ -38,6 +38,12 @@ class AbstractRunner:
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time'))
 
+    def _run(self):
+        p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
+        output = p.communicate()
+        assert p.wait() == 0
+        return output[0]
+
     def run(self): # return the time, in second
         raise NotImplementedError()
 
@@ -88,12 +94,6 @@ class MatrixProduct(AbstractRunner):
         self.local_csv_writer = csv.writer(self.local_csv_file)
         self.local_csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
 
-    def _run(self):
-        p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
-        output = p.communicate()
-        assert p.wait() == 0
-        return output[0]
-
     def run(self):
         output_str = self._run()
         match = self.regex.match(output_str)
@@ -107,7 +107,19 @@ class MatrixProduct(AbstractRunner):
         self.local_csv_file.close()
 
 class HPL(AbstractRunner):
-    pass
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.args = self.default_args + ['../hpl-2.2/bin/SMPI/xhpl', str(self.size)]
+
+    def prequel(self):
+        super().prequel()
+        # TODO generate HPL.dat
+        raise NotImplementedError()
+
+    def run(self):
+        output_str = self._run()
+        # TODO find the number of GFLOPS
+        raise NotImplementedError()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -121,10 +133,18 @@ if __name__ == '__main__':
             required=True, help='Number of processes to use.')
     required_named.add_argument('--global_csv', type = str,
             required=True, help='Path of the global CSV file.')
-    required_named.add_argument('--local_csv', type = str,
-            required=True, help='Path of the local CSV file.')
+    parser.add_argument('--local_csv', type = str,
+            help='Path of the local CSV file.')
     required_named.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
             required=True, help='Description of the fat tree(s).')
+    required_named.add_argument('--experiment',
+            required=True, help='The type of experiment to run.',
+            choices = ['matrix_product', 'HPL'])
     args = parser.parse_args()
-    runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
+    if args.experiment == 'matrix_product':
+        runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
+    elif args.experiment == 'HPL':
+        runner = HPL(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv)
+    else:
+        assert False # unreachable
     runner.run_all()
