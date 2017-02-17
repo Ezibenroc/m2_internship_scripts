@@ -72,6 +72,7 @@ class AbstractRunner:
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops'))
 
     def _run(self):
+        print(' '.join(self.args))
         p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
         output = p.communicate()
         assert p.wait() == 0
@@ -161,6 +162,7 @@ class HPL(AbstractRunner):
     def __init__(self, *args):
         super().__init__(*args)
         self.args = self.default_args + ['../hpl-2.2/bin/SMPI/xhpl']
+        self.index = 0
 
     def get_P_Q(self):
         factors = primes(self.nb_proc)
@@ -179,9 +181,12 @@ class HPL(AbstractRunner):
             f.write(HPL_dat_text.format(P=P, Q=Q, size=self.size))
 
     def run(self): # we parse the ugly output...
-        output_str = self._run().split(b'\n')
-        output = [sub.split() for sub in output_str]
-        for i, sub in enumerate(output_str):
+        output_str = self._run()
+        with open('HPL_%d.out' % self.index, 'wb') as f:
+            f.write(output_str)
+        self.index += 1
+        output = [sub.split() for sub in output_str.split(b'\n')]
+        for i, sub in enumerate(output):
             if b'Time' in sub and b'Gflops' in sub:
                 break
         sub = output[i+2]
