@@ -55,7 +55,7 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '-np', str(self.nb_proc),
+        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:yes', '-np', str(self.nb_proc),
                 '-hostfile', self.host_file, '-platform', self.topo_file]
 
     def check_params(self):
@@ -72,7 +72,6 @@ class AbstractRunner:
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops'))
 
     def _run(self):
-        print(' '.join(self.args))
         p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
         output = p.communicate()
         assert p.wait() == 0
@@ -182,8 +181,6 @@ class HPL(AbstractRunner):
 
     def run(self): # we parse the ugly output...
         output_str = self._run()
-        with open('HPL_%d.out' % self.index, 'wb') as f:
-            f.write(output_str)
         self.index += 1
         output = [sub.split() for sub in output_str.split(b'\n')]
         for i, sub in enumerate(output):
@@ -191,20 +188,9 @@ class HPL(AbstractRunner):
                 break
         sub = output[i+2]
         error = False
-        try:
-            time = float(sub[-2])
-            flops = float(sub[-1])
-            if flops > self.nb_proc * 10: # generous here, each host has 1Gflops speed
-                print('!! GOT AN ANOMALY !!')
-                error = True # sometimes, for no reason, we get strange anomalies
-        except (ValueError, IndexError):
-            print('!! GOT AN EXCEPTION !!')
-            error = True # sometimes, for no apparent reason, HPL does not output this line...
-        if error:
-            print(b' '.join(sub))
-            return self.run()
-        else:
-            return time, flops
+        time = float(sub[-2])
+        flops = float(sub[-1])
+        return time, flops
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
