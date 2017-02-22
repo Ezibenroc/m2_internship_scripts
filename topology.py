@@ -215,10 +215,14 @@ class FatTree:
             node.dump_tikz_children_edges(fd)
 
     def dump_tikz(self, fd):
+        fd.write('\\begin{figure}[!ht]')
+        fd.write('\\centering\n')
         fd.write('\\begin{tikzpicture}[scale=0.7,transform shape]\n')
         self.dump_tikz_nodes(fd)
         self.dump_tikz_edges(fd)
         fd.write('\\end{tikzpicture}\n')
+        fd.write('\\caption{%s}\n' % str(self))
+        fd.write('\\end{figure}\n')
 
 def topo_to_tex(topologies, filename):
     with open(filename, 'w') as fd:
@@ -227,11 +231,11 @@ def topo_to_tex(topologies, filename):
         fd.write('\\geometry{paperwidth=16383pt, paperheight=16383pt, left=40pt, top=40pt, textwidth=280pt, marginparsep=20pt, marginparwidth=100pt, textheight=16263pt, footskip=40pt}\n')
         fd.write('\\usepackage{tikz}\n')
         fd.write('\\thispagestyle{empty}\n')
+        fd.write('\\usepackage{caption}')
+        fd.write('\\captionsetup[figure]{labelformat=empty}')
         fd.write('\\begin{document}\n')
-        fd.write('\\centering\n')
         for topo in topologies:
             topo.dump_tikz(fd)
-            fd.write('\\vspace{10pt}')
         fd.write('\\end{document}\n')
 
 def topo_to_pdf(topologies, filename):
@@ -241,7 +245,7 @@ def topo_to_pdf(topologies, filename):
     cwd = os.getcwd()
     os.chdir('/tmp')
     topo_to_tex(topologies, 'tmp.tex')
-    p = Popen(['xelatex', 'tmp.tex'], stdout = DEVNULL, stderr = DEVNULL)
+    p = Popen(['xelatex', '-interaction=batchmode', 'tmp.tex'], stdout = DEVNULL, stderr = DEVNULL)
     assert p.wait() == 0
     p = Popen(['pdfcrop', 'tmp.pdf', 'tmp.pdf'], stdout = DEVNULL, stderr = DEVNULL)
     assert p.wait() == 0
