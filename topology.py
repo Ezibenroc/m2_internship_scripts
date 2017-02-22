@@ -146,3 +146,117 @@ class FatTree:
         with open(file_name, 'w') as f:
             for host_id in range(self.nb_nodes()):
                 f.write(pattern % host_id)
+
+    def get_nodes_at_level(self, l):
+        descriptors = []
+        for j in reversed(range(len(self.down))):
+            if j > l:
+                descriptors.append(range(self.down[j]))
+            else:
+                descriptors.append(range(self.up[j]))
+        return [Node(l, descr) for descr in itertools.product(*descriptors)]
+
+    def initialize_nodes(self):
+        self.nodes = dict()
+        for l in range(len(self.down)):
+            self.nodes[l] = self.get_nodes_at_level(l)
+            for i, node in enumerate(self.nodes[l]):
+                node.index = i
+                node.coordinates = node.index - len(self.nodes[l])/2, l
+                if l == 0:
+                    node.children = range(i*self.down[0], (i+1)*self.down[0])
+                else:
+                    node.children = []
+                node.parents  = []
+
+    def initialize_edges(self):
+        for l in range(1, len(self.down)):
+            for parent in self.nodes[l]:
+                for potential_child in self.nodes[l-1]:
+                    if parent.is_up_node_of(potential_child):
+                        parent.children.append(potential_child)
+                        potential_child.parents.append(parent)
+
+    def iterate_nodes(self):
+        for nodes in self.nodes.values():
+            for node in nodes:
+                yield node
+
+    def iterate_roots(self):
+        return iter(self.nodes[len(self.down)-1])
+
+    def check_edges(self):
+        for node in self.iterate_nodes():
+            assert len(node.children) == self.down[node.level]
+            if node.level < len(self.down) - 1:
+                assert len(node.parents) == self.up[node.level+1]
+            else:
+                assert len(node.parents) == 0
+
+    def check_leaves(self):
+        for root in self.iterate_roots():
+            assert len(set(root.get_leaves())) == self.nb_nodes()
+
+    def check(self):
+        self.check_edges()
+        self.check_leaves()
+
+    def initialize(self):
+        self.initialize_nodes()
+        self.initialize_edges()
+        self.check()
+
+    def dump_tikz_nodes(self, fd):
+        for node in self.iterate_nodes():
+            node.dump_tikz_node(fd)
+
+    def dump_tikz_edges(self, fd):
+        for node in self.iterate_nodes():
+            node.dump_tikz_children_edges(fd)
+
+    def dump_tikz(self, fd):
+        fd.write('\\begin{tikzpicture}[scale=0.7,transform shape]\n')
+        self.dump_tikz_nodes(fd)
+        self.dump_tikz_edges(fd)
+        fd.write('\\end{tikzpicture}\n')
+
+
+class Node:
+    NODE_TIKZ_OPT = 'draw, circle'
+
+    def __init__(self, level, descriptor):
+        self.level = level
+        self.descriptor = descriptor
+
+    def __repr__(self):
+        return '%d: %s' % (self.level, self.descriptor)
+
+    def __eq__(self, other):
+        return self.level == other.level and self.descriptor == other.descriptor
+
+    def is_up_node_of(self, other):
+        if self.level != other.level + 1:
+            return False
+        for i in range(len(self.descriptor)):
+            if len(self.descriptor) - i - 1 == self.level:
+                continue
+            if self.descriptor[i] != other.descriptor[i]:
+                return False
+        return True
+
+    def get_leaves(self):
+        if self.level == 0:
+            return list(self.children)
+        else:
+            return sum([child.get_leaves() for child in self.children], [])
+
+    def get_id(self):
+        return '%d_%d' % (self.level, self.index)
+
+    def dump_tikz_node(self, fd):
+        fd.write('\\node[%s] (%s) at %s {} ;\n' % (self.NODE_TIKZ_OPT, self.get_id(), self.coordinates))
+
+    def dump_tikz_children_edges(self, fd):
+        if self.level > 0:
+            for child in self.children:
+                fd.write('\\draw (%s.north) -- (%s.south) ;\n' % (child.get_id(), self.get_id()))
