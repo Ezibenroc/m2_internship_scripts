@@ -220,6 +220,32 @@ class FatTree:
         self.dump_tikz_edges(fd)
         fd.write('\\end{tikzpicture}\n')
 
+    def dump_tex(self, filename):
+        with open(filename, 'w') as fd:
+            fd.write('\\documentclass[10pt]{article}\n')
+            fd.write('\\usepackage{geometry}\n')
+            fd.write('\\geometry{paperwidth=16383pt, paperheight=16383pt, left=40pt, top=40pt, textwidth=280pt, marginparsep=20pt, marginparwidth=100pt, textheight=16263pt, footskip=40pt}\n')
+            fd.write('\\usepackage{tikz}\n')
+            fd.write('\\thispagestyle{empty}\n')
+            fd.write('\\begin{document}\n')
+            fd.write('\\centering\n')
+            self.dump_tikz(fd)
+            fd.write('\\end{document}\n')
+
+    def dump_pdf(self, filename):
+        import os
+        import shutil
+        from subprocess import Popen, PIPE, DEVNULL
+        cwd = os.getcwd()
+        os.chdir('/tmp')
+        self.dump_tex('tmp.tex')
+        p = Popen(['xelatex', 'tmp.tex'], stdout = DEVNULL, stderr = DEVNULL)
+        assert p.wait() == 0
+        p = Popen(['pdfcrop', 'tmp.pdf', 'tmp.pdf'], stdout = DEVNULL, stderr = DEVNULL)
+        assert p.wait() == 0
+        shutil.move('tmp.pdf', os.path.join(cwd, filename))
+        os.chdir(cwd)
+
 
 class Node:
     NODE_TIKZ_OPT = 'draw, circle'
