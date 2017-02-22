@@ -76,19 +76,6 @@ class FatTree:
     loopback_bw = '100MBps'
     loopback_lat = '0'
 
-    @classmethod
-    def parse(cls, description):
-        def parse_int_list(string):
-            return [int(n) for n in string.split(',')]
-        sub_descr = description.split(';')
-        assert len(sub_descr) == 4
-        height = int(sub_descr[0])
-        down     = parse_int_list(sub_descr[1])
-        up       = parse_int_list(sub_descr[2])
-        parallel = parse_int_list(sub_descr[3])
-        assert height == len(down) == len(up) == len(parallel)
-        return cls(down, up, parallel)
-
     def __init__(self, down, up, parallel):
         def check_list(l):
             for n in l:
