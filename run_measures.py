@@ -72,9 +72,11 @@ class AbstractRunner:
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops'))
 
     def _run(self):
-        p = Popen(self.args, stdout = PIPE, stderr = DEVNULL)
-        output = p.communicate()
-        assert p.wait() == 0
+        with open('experiment.log', 'w') as f_log:
+            p = Popen(self.args, stdout = PIPE, stderr = f_log)
+            output = p.communicate()
+            process_exit_code = p.wait()
+        assert process_exit_code == 0
         return output[0]
 
     def run(self): # return the time (in second) and the speed (in Gflops)
