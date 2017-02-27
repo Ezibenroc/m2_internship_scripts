@@ -10,3 +10,4 @@ broadcast
 test
 HPL.dat
 experiment.log
+mmap_error
