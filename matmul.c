@@ -15,6 +15,9 @@
 static void program_abort(char *exec_name, char *message);
 static void print_usage();
 
+static int smpi_sample = 0;
+static int smpi_malloc = 0;
+
 // Abort, printing the usage information only if the
 // first argument is non-NULL (and hopefully set to argv[0]), and
 // printing the second argument regardless.
@@ -78,13 +81,20 @@ int my_sqrt(int n) {
 }
 
 float *allocate_matrix(int size) {
-    float *matrix = (float*) SMPI_SHARED_MALLOC(sizeof(float*)*size*size);
+    float *matrix;
+    if(smpi_malloc)
+        matrix = (float*) SMPI_SHARED_MALLOC(sizeof(float*)*size*size);
+    else
+        matrix = (float*) malloc(sizeof(float*)*size*size);
     assert(matrix);
     return matrix;
 }
 
 void free_matrix(float *matrix, int size) {
-    SMPI_SHARED_FREE(matrix);
+    if(smpi_malloc)
+        SMPI_SHARED_FREE(matrix);
+    else
+        free(matrix);
 }
 
 inline void matrix_copy(float *dest, const float *src, int size) {
@@ -160,13 +170,27 @@ bool matrix_equal(float *matrix_A, float *matrix_B, int size, float epsilon) {
 }
 
 void sequential_matrix_product(float *A, float *B, float *C, int size) {
-    for(int k = 0 ; k < size ; k++) SMPI_SAMPLE_GLOBAL(0.5*size, 0.01) {
-        for(int i = 0 ; i < size ; i++) {
-            for(int j = 0 ; j < size ; j++) {
-                float a = matrix_get(A, size, i, k);
-                float b = matrix_get(B, size, k, j);
-                float c = matrix_get(C, size, i, j);
-                matrix_set(C, size, i, j, c + a*b);
+    if(smpi_sample) {
+        for(int k = 0 ; k < size ; k++) SMPI_SAMPLE_GLOBAL(0.5*size, 0.01) {
+            for(int i = 0 ; i < size ; i++) {
+                for(int j = 0 ; j < size ; j++) {
+                    float a = matrix_get(A, size, i, k);
+                    float b = matrix_get(B, size, k, j);
+                    float c = matrix_get(C, size, i, j);
+                    matrix_set(C, size, i, j, c + a*b);
+                }
+            }
+        }
+    }
+    else {
+        for(int k = 0 ; k < size ; k++) {
+            for(int i = 0 ; i < size ; i++) {
+                for(int j = 0 ; j < size ; j++) {
+                    float a = matrix_get(A, size, i, k);
+                    float b = matrix_get(B, size, k, j);
+                    float c = matrix_get(C, size, i, j);
+                    matrix_set(C, size, i, j, c + a*b);
+                }
             }
         }
     }
@@ -202,7 +226,7 @@ void matrix_product(float *A, float *B, float *C, int size, int global_size, int
         sequential_matrix_product(A_send, B_send, C, size);
         computation_time += MPI_Wtime() - tmp_time;
     }
-    printf("rank: %4d | communication_time: %.8lf | computation_time: %.8lf\n", proc_i*sqrt_num_procs+proc_j, communication_time, computation_time);
+ //   printf("rank: %4d | communication_time: %.8lf | computation_time: %.8lf\n", proc_i*sqrt_num_procs+proc_j, communication_time, computation_time);
     free_matrix(A_buff, size);
     free_matrix(B_buff, size);
     MPI_Comm_free(&line_comm);
@@ -256,6 +280,14 @@ float *gather_matrix(float *matrix, int size, int rank, int sqrt_num_procs) {
     }
 }
 
+int parse_bool(char *exec_name, char *str) {
+    if(str && str[0] == '1' && str[1] == '\0')
+        return 1;
+    else if(str && str[0] == '0' && str[1] == '\0')
+        return 0;
+    else
+        program_abort(exec_name, "Wrong boolean argument.");
+}
 
 ///////////////////////////
 ////// Main function //////
@@ -273,13 +305,17 @@ int main(int argc, char *argv[])
     MPI_Init(&argc, &argv);
     int matrix_size = 0;
 
-    // Bcast implementation name
     if (argc < 2) {
         program_abort(argv[0],"Missing <matrix size> argument\n");
     } else {
         matrix_size = atoi(argv[1]);
     }
-
+    if (argc > 2) {
+        if(argc != 4)
+            program_abort(argv[0], "Missing <SMPI_SAMPLE> and <SMPI_MALLOC> arguments\n");
+        smpi_sample = parse_bool(argv[0], argv[2]);
+        smpi_malloc = parse_bool(argv[0], argv[3]);
+    }
     // Determine rank and number of processes
     int num_procs;
     int rank;
@@ -346,7 +382,7 @@ int main(int argc, char *argv[])
 
     // Print out bcast implementation name and wall-clock time, only if the bcast was successful
     if (0 == rank) {
-        fprintf(stdout,"number_procs: %d | matrix_size: %d |  time: %.8lf seconds\n",
+        fprintf(stdout,"number_procs: %d | matrix_size: %d | smpi_sample: %d | smpi_malloc: %d | time: %.8lf seconds\n",
                 num_procs,
                 matrix_size,
                 total_time);
