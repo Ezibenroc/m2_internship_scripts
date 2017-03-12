@@ -382,10 +382,7 @@ int main(int argc, char *argv[])
 
     // Print out bcast implementation name and wall-clock time, only if the bcast was successful
     if (0 == rank) {
-        fprintf(stdout,"number_procs: %d | matrix_size: %d | smpi_sample: %d | smpi_malloc: %d | time: %.8lf seconds\n",
-                num_procs,
-                matrix_size,
-                total_time);
+        printf("%.8lf\n", total_time);
     }
 
     free_matrix(matrix_A, local_size);
