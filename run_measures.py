@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import sys
+import time
 import random
 from subprocess import Popen, PIPE
 import re
@@ -8,6 +9,7 @@ from math import sqrt
 import csv
 import argparse
 import itertools
+from memstat import get_memory_usage
 from topology import IntSetParser, FatTreeParser
 
 HPL_dat_text = '''HPLinpack benchmark input file
@@ -73,7 +75,7 @@ class AbstractRunner:
         self.check_params()
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time'))
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time', 'uss', 'rss'))
 
     @classmethod
     def parse_smpi(cls, output):
@@ -82,8 +84,24 @@ class AbstractRunner:
         application_time = float(match.group('application'))
         return simulation_time, application_time
 
+    @staticmethod
+    def get_max_memory(process_name):
+        uss, rss = 0, 0
+        while True:
+            time.sleep(0.1)
+            mem_usage = get_memory_usage([process_name])
+            if len(mem_usage) == 0:
+                break
+            assert len(mem_usage) == 1
+            mem_usage = mem_usage[0]
+            uss = max(uss, mem_usage['uss'])
+            rss = max(rss, mem_usage['rss'])
+        return uss, rss
+
+
     def _run(self, args):
         p = Popen(args, stdout = PIPE, stderr = PIPE)
+        self.uss, self.rss = self.get_max_memory(self.exec_name)
         output = p.communicate()
         self.simulation_time, self.application_time = self.parse_smpi(output[1])
         process_exit_code = p.wait()
@@ -114,11 +132,13 @@ class AbstractRunner:
                 topo.dump_host_file(self.host_file)
                 time, flops = self.run(nb_proc, size)
                 self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops,
-                    self.simulation_time, self.application_time))
+                    self.simulation_time, self.application_time,
+                    self.uss, self.rss))
         self.sequel()
 
 class MatrixProduct(AbstractRunner):
 
+    exec_name = 'matmul'
     local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
     global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
     whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
@@ -177,6 +197,7 @@ def primes(n):
 
 class HPL(AbstractRunner):
 
+    exec_name = 'xhpl'
     HPL_file_name = 'HPL.dat'
 
     def __init__(self, *args):
