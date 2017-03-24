@@ -44,10 +44,15 @@ HPL.out      output file name (if any)
 8            memory alignment in double (> 0)
 '''
 
+float_string = b'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
+
 class AbstractRunner:
 
     topo_file = 'topo.xml'
     host_file = 'host.txt'
+    simulation_time_str  = b'The simulation took (?P<simulation>%s) seconds \(after parsing and platform setup\)' % float_string
+    application_time_str = b'(?P<application>%s) seconds were actual computation of the application' % float_string
+    smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
 
     def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name):
         self.topologies = topologies
@@ -55,8 +60,8 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:yes', '-np', str(self.nb_proc),
-                '-hostfile', self.host_file, '-platform', self.topo_file]
+        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:yes',
+                '--cfg=smpi/display-timing:yes', '-np', str(self.nb_proc), '-hostfile', self.host_file, '-platform', self.topo_file]
 
     def check_params(self):
         topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
@@ -69,15 +74,24 @@ class AbstractRunner:
         self.check_params()
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops'))
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time'))
+
+    @classmethod
+    def parse_smpi(cls, output):
+        match = cls.smpi_reg.match(output)
+        simulation_time = float(match.group('simulation'))
+        application_time = float(match.group('application'))
+        return simulation_time, application_time
 
     def _run(self):
-        with open('experiment.log', 'w') as f_log:
-            p = Popen(self.args, stdout = PIPE, stderr = f_log)
-            output = p.communicate()
-            process_exit_code = p.wait()
+        print(' '.join(self.args))
+        p = Popen(self.args, stdout = PIPE, stderr = PIPE)
+        output = p.communicate()
+        self.simulation_time, self.application_time = self.parse_smpi(output[1])
+        process_exit_code = p.wait()
         assert process_exit_code == 0
         return output[0]
+
 
     def run(self): # return the time (in second) and the speed (in Gflops)
         raise NotImplementedError()
@@ -96,12 +110,12 @@ class AbstractRunner:
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
                 time, flops = self.run()
-                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time, flops))
+                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time, flops,
+                    self.simulation_time, self.application_time))
         self.sequel()
 
 class MatrixProduct(AbstractRunner):
 
-    float_string = '[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
     local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
     global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
     whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
