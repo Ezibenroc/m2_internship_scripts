@@ -85,7 +85,6 @@ class AbstractRunner:
         return simulation_time, application_time
 
     def _run(self, args):
-        print(' '.join(args))
         p = Popen(args, stdout = PIPE, stderr = PIPE)
         output = p.communicate()
         self.simulation_time, self.application_time = self.parse_smpi(output[1])
