@@ -2,14 +2,12 @@
 
 import sys
 import random
-from subprocess import Popen, PIPE, DEVNULL
+from subprocess import Popen, PIPE
 import re
-from math import floor, sqrt
+from math import sqrt
 import csv
-import os
 import argparse
 import itertools
-from collections import namedtuple
 from topology import IntSetParser, FatTreeParser
 
 HPL_dat_text = '''HPLinpack benchmark input file
