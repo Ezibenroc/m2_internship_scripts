@@ -1,7 +1,6 @@
 import functools
 import itertools
 from lxml import etree
-from roaringbitmap import RoaringBitmap
 
 class ParseError(Exception):
     pass
@@ -56,7 +55,7 @@ class IntSetParser(Parser):
         if len(result) != 1:
             raise ParseError('Having sub-lists does not make sense here.')
         result = result[0]
-        return RoaringBitmap.union(*[RoaringBitmap(sub) for sub in result])
+        return set.union(*[set(sub) for sub in result])
 
 class FatTreeParser(Parser):
     @classmethod

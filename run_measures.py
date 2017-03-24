@@ -8,6 +8,7 @@ from math import floor, sqrt
 import csv
 import os
 import argparse
+import itertools
 from collections import namedtuple
 from topology import IntSetParser, FatTreeParser
 
@@ -99,16 +100,19 @@ class AbstractRunner:
     def sequel(self):
         self.csv_file.close()
 
+    def gen_exp(self):
+        all_exp = list(itertools.product(self.topologies, self.nb_proc, self.size))
+        random.shuffle(all_exp)
+        return all_exp
+
     def run_all(self):
         self.prequel()
         for i in range(1, self.nb_runs+1):
             print('Iteration %d/%d' % (i, args.nb_runs))
-            random.shuffle(self.topologies)
-            for j, topo in enumerate(self.topologies):
-                size = random.choice(self.size)
-                nb_proc = random.choice(self.nb_proc)
+            exp = self.gen_exp()
+            for j, (topo, nb_proc, size) in enumerate(exp):
                 self.current_topo = topo
-                print('\tSub-iteration %d/%d' % (j+1, len(self.topologies)))
+                print('\tSub-iteration %d/%d' % (j+1, len(exp)))
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
                 time, flops = self.run(nb_proc, size)
