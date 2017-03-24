@@ -9,7 +9,7 @@ import csv
 import os
 import argparse
 from collections import namedtuple
-from topology import FatTreeParser
+from topology import IntSetParser, FatTreeParser
 
 HPL_dat_text = '''HPLinpack benchmark input file
 Innovative Computing Laboratory, University of Tennessee
@@ -61,13 +61,13 @@ class AbstractRunner:
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
         self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:yes',
-                '--cfg=smpi/display-timing:yes', '-np', str(self.nb_proc), '-hostfile', self.host_file, '-platform', self.topo_file]
+                '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
 
     def check_params(self):
         topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
         min_nodes = topo_min_nodes.nb_nodes()
-        if min_nodes < self.nb_proc:
-            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_nodes, min_nodes, self.nb_proc))
+        if min_nodes < min(self.nb_proc):
+            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_nodes, min_nodes, min(self.nb_proc)))
             sys.exit(1)
 
     def prequel(self):
@@ -83,9 +83,9 @@ class AbstractRunner:
         application_time = float(match.group('application'))
         return simulation_time, application_time
 
-    def _run(self):
-        print(' '.join(self.args))
-        p = Popen(self.args, stdout = PIPE, stderr = PIPE)
+    def _run(self, args):
+        print(' '.join(args))
+        p = Popen(args, stdout = PIPE, stderr = PIPE)
         output = p.communicate()
         self.simulation_time, self.application_time = self.parse_smpi(output[1])
         process_exit_code = p.wait()
@@ -93,7 +93,7 @@ class AbstractRunner:
         return output[0]
 
 
-    def run(self): # return the time (in second) and the speed (in Gflops)
+    def run(self, nb_proc, size): # return the time (in second) and the speed (in Gflops)
         raise NotImplementedError()
 
     def sequel(self):
@@ -105,12 +105,14 @@ class AbstractRunner:
             print('Iteration %d/%d' % (i, args.nb_runs))
             random.shuffle(self.topologies)
             for j, topo in enumerate(self.topologies):
+                size = random.choice(self.size)
+                nb_proc = random.choice(self.nb_proc)
                 self.current_topo = topo
                 print('\tSub-iteration %d/%d' % (j+1, len(self.topologies)))
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
-                time, flops = self.run()
-                self.csv_writer.writerow((topo, topo.nb_roots(), self.nb_proc, self.size, time, flops,
+                time, flops = self.run(nb_proc, size)
+                self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops,
                     self.simulation_time, self.application_time))
         self.sequel()
 
@@ -125,17 +127,18 @@ class MatrixProduct(AbstractRunner):
     def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, local_csv_file_name):
         super().__init__(topologies, size, nb_proc, nb_runs, csv_file_name)
         self.local_csv_file_name = local_csv_file_name
-        self.args = self.default_args + ['./matmul', str(self.size)]
 
     def check_params(self):
         super().check_params()
-        sqrt_proc = int(sqrt(self.nb_proc))
-        if sqrt_proc*sqrt_proc != self.nb_proc:
-            print('Error: %d is not a square.' % self.nb_proc)
-            sys.exit(1)
-        if self.size%sqrt_proc != 0:
-            print('Error: sqrt(%d) does not divide %d.' % (self.nb_proc, self.size))
-            sys.exit(1)
+        for nb_proc in self.nb_proc:
+            sqrt_proc = int(sqrt(nb_proc))
+            if sqrt_proc*sqrt_proc != nb_proc:
+                print('Error: %d is not a square.' % nb_proc)
+                sys.exit(1)
+            for size in self.size:
+                if size%sqrt_proc != 0:
+                    print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
+                    sys.exit(1)
 
     def prequel(self):
         super().prequel()
@@ -143,11 +146,12 @@ class MatrixProduct(AbstractRunner):
         self.local_csv_writer = csv.writer(self.local_csv_file)
         self.local_csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
 
-    def run(self):
-        output_str = self._run()
+    def run(self, nb_proc, size):
+        args = self.default_args + ['-np', str(nb_proc)] + ['./matmul', str(size)]
+        output_str = self._run(args)
         match = self.regex.match(output_str)
         for local in self.local_regex.finditer(match.group('local')): # would be very nice if we could explore the regex hierarchy instead of having to do another match...
-            self.local_csv_writer.writerow((self.current_topo, self.current_topo.nb_roots(), self.nb_proc, self.size,
+            self.local_csv_writer.writerow((self.current_topo, self.current_topo.nb_roots(), nb_proc, size,
                 int(local.group('rank')), float(local.group('communication_time')), float(local.group('computation_time'))))
         time = float(match.group('time'))
         flops = 2*self.size**3 / (time*10**9)
@@ -176,11 +180,10 @@ class HPL(AbstractRunner):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.args = self.default_args + ['../hpl-2.2/bin/SMPI/xhpl']
         self.index = 0
 
-    def get_P_Q(self):
-        factors = primes(self.nb_proc)
+    def get_P_Q(self, nb_proc):
+        factors = primes(nb_proc)
         P, Q = 1, 1
         for fact in factors:
             if P < Q:
@@ -189,14 +192,16 @@ class HPL(AbstractRunner):
                 Q *= fact
         return P, Q
 
-    def prequel(self):
-        super().prequel()
-        P, Q = self.get_P_Q()
+    def gen_hpl_file(self, nb_proc, size):
+        P, Q = self.get_P_Q(nb_proc)
         with open(self.HPL_file_name, 'w') as f:
-            f.write(HPL_dat_text.format(P=P, Q=Q, size=self.size))
+            f.write(HPL_dat_text.format(P=P, Q=Q, size=size))
 
-    def run(self): # we parse the ugly output...
-        output_str = self._run()
+
+    def run(self, nb_proc, size): # we parse the ugly output...
+        args = self.default_args + ['-np', str(nb_proc)] + ['../hpl-2.2/bin/SMPI/xhpl']
+        self.gen_hpl_file(nb_proc, size)
+        output_str = self._run(args)
         self.index += 1
         output = [sub.split() for sub in output_str.split(b'\n')]
         for i, sub in enumerate(output):
@@ -214,9 +219,9 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--nb_runs', type=int,
             default=10, help='Number of experiments to perform.')
     required_named = parser.add_argument_group('required named arguments')
-    required_named.add_argument('--size', type = int,
+    required_named.add_argument('--size', type = lambda s: IntSetParser.parse(s),
             required=True, help='Sizes of the problem')
-    required_named.add_argument('--nb_proc', type = int,
+    required_named.add_argument('--nb_proc', type = lambda s: IntSetParser.parse(s),
             required=True, help='Number of processes to use.')
     required_named.add_argument('--global_csv', type = str,
             required=True, help='Path of the global CSV file.')

@@ -1,6 +1,7 @@
 import functools
 import itertools
 from lxml import etree
+from roaringbitmap import RoaringBitmap
 
 class ParseError(Exception):
     pass
@@ -47,6 +48,15 @@ class Parser:
             raise ParseError('Wrong integer: %s' % description)
         else:
             return result
+
+class IntSetParser(Parser):
+    @classmethod
+    def parse(cls, description):
+        result = super().parse(description)
+        if len(result) != 1:
+            raise ParseError('Having sub-lists does not make sense here.')
+        result = result[0]
+        return RoaringBitmap.union(*[RoaringBitmap(sub) for sub in result])
 
 class FatTreeParser(Parser):
     @classmethod
