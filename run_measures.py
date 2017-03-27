@@ -85,23 +85,28 @@ class AbstractRunner:
         return simulation_time, application_time
 
     @staticmethod
-    def get_max_memory(process_name):
+    def get_max_memory(process_name, timeout):
+        sleep_time = 0.1
         uss, rss = 0, 0
-        while True:
-            time.sleep(0.1)
+        for i in range(int(timeout/sleep_time)):
+            time.sleep(sleep_time)
             mem_usage = get_memory_usage([process_name])
             if len(mem_usage) == 0:
-                break
+                return uss, rss
             assert len(mem_usage) == 1
             mem_usage = mem_usage[0]
             uss = max(uss, mem_usage['uss'])
             rss = max(rss, mem_usage['rss'])
-        return uss, rss
+        raise TimeoutError
 
 
     def _run(self, args):
         p = Popen(args, stdout = PIPE, stderr = PIPE)
-        self.uss, self.rss = self.get_max_memory(self.exec_name)
+        try:
+            self.uss, self.rss = self.get_max_memory(self.exec_name, timeout=10*60)
+        except TimeoutError as e:
+            p.terminate()
+            raise e
         output = p.communicate()
         self.simulation_time, self.application_time = self.parse_smpi(output[1])
         process_exit_code = p.wait()
@@ -130,7 +135,11 @@ class AbstractRunner:
                 print('\tSub-iteration %d/%d' % (j+1, len(exp)))
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
-                time, flops = self.run(nb_proc, size)
+                try:
+                    time, flops = self.run(nb_proc, size)
+                except TimeoutError:
+                    print('\t\tTimeoutError (size=%d nb_proc=%d)' % (size, nb_proc))
+                    continue
                 self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops,
                     self.simulation_time, self.application_time,
                     self.uss, self.rss))
