@@ -78,10 +78,18 @@ class AbstractRunner:
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time', 'uss', 'rss'))
 
     @classmethod
-    def parse_smpi(cls, output):
+    def parse_smpi(cls, output, args):
         match = cls.smpi_reg.match(output)
-        simulation_time = float(match.group('simulation'))
-        application_time = float(match.group('application'))
+        try:
+            simulation_time = float(match.group('simulation'))
+            application_time = float(match.group('application'))
+        except AttributeError:
+            print('### ERROR ###')
+            print('Command was:')
+            print(' '.join(args))
+            print('Simgrid output was:')
+            print(output.decode('utf-8'))
+            sys.exit(1)
         return simulation_time, application_time
 
     @staticmethod
@@ -108,7 +116,7 @@ class AbstractRunner:
             p.terminate()
             raise e
         output = p.communicate()
-        self.simulation_time, self.application_time = self.parse_smpi(output[1])
+        self.simulation_time, self.application_time = self.parse_smpi(output[1], args)
         process_exit_code = p.wait()
         assert process_exit_code == 0
         return output[0]
