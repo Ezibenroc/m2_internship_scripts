@@ -49,6 +49,7 @@ float_string = b'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
 
 class AbstractRunner:
 
+    exec_name = 'smpimain'
     topo_file = 'topo.xml'
     host_file = 'host.txt'
     simulation_time_str  = b'The simulation took (?P<simulation>%s) seconds \(after parsing and platform setup\)' % float_string
@@ -155,7 +156,6 @@ class AbstractRunner:
 
 class MatrixProduct(AbstractRunner):
 
-    exec_name = 'matmul'
     local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
     global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
     whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
@@ -214,7 +214,6 @@ def primes(n):
 
 class HPL(AbstractRunner):
 
-    exec_name = 'xhpl'
     HPL_file_name = 'HPL.dat'
 
     def __init__(self, *args):
