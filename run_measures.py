@@ -61,7 +61,7 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:yes',
+        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
 
     def check_params(self):
