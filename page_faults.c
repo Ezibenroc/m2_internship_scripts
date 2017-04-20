@@ -43,23 +43,17 @@ void* shared_malloc(size_t size) {
 }
 
 void *allocate(size_t size, int shared) {
-    if(shared == 0)
-        return malloc(size);
-    else if(shared == 1)
+    if(shared)
         return shared_malloc(size);
-    else if(shared == 2)
-        return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     else
-        assert(0);
+        return malloc(size);
 }
 
 void deallocate(void *ptr, size_t size, int shared) {
-    if(shared == 0)
-        free(ptr);
-    else if(shared == 1 || shared ==2)
+    if(shared)
         munmap(ptr, size);
     else
-        assert(0);
+        free(ptr);
 }
 
 int main(int argc, char *argv[]) {
