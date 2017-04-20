@@ -11,3 +11,4 @@ test
 HPL.dat
 experiment.log
 mmap_error
+page_faults
