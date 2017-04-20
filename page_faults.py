@@ -24,7 +24,8 @@ if __name__ == '__main__':
     nb_exp = int(sys.argv[1])
     max_size = int(sys.argv[2])
     file_name = sys.argv[3]
-    experiments = list(product([True, False], [True, False]))
+    shared_values = dict(enumerate(['malloc', 'shared', 'mmap']))
+    experiments = list(product(shared_values.keys(), [True, False]))
     with open(file_name, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('shared', 'size', 'mem_access', 'nb_page_faults'))
@@ -32,7 +33,7 @@ if __name__ == '__main__':
         for exp in range(nb_exp):
             print('Experiment %d/%d' % (exp+1, nb_exp))
             random.shuffle(experiments)
+            size = random.randint(1, max_size)
             for shared, mem_access in experiments:
-                size = random.randint(1, max_size)
                 nb_page_faults = measure_page_faults(shared, size, mem_access)
-                csv_writer.writerow((shared, size, mem_access, nb_page_faults))
+                csv_writer.writerow((shared_values[shared], size, mem_access, nb_page_faults))
