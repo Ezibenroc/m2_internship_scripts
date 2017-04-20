@@ -5,7 +5,7 @@ import random
 from subprocess import Popen, PIPE, DEVNULL
 import re
 import csv
-from math import log2, floor
+from math import log, floor
 from itertools import product
 
 def measure_page_faults(shared, size, mem_access):
@@ -23,7 +23,9 @@ if __name__ == '__main__':
         sys.exit(1)
     nb_exp = int(sys.argv[1])
     max_size = int(sys.argv[2])
-    sizes = [2**n for n in range(0, floor(log2(max_size))+1)]
+    base = 1.2
+    sizes = [floor(base**n) for n in range(1, floor(log(max_size, base))+1)]
+    sizes = list(sorted(set(sizes)))
     file_name = sys.argv[3]
     experiments = list(product([True, False], sizes, [True, False]))*nb_exp
     random.shuffle(experiments)
