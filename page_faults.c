@@ -6,14 +6,17 @@
 #include <stdint.h>
 #include <string.h>
 
-#define blocksize 0x100000
 #define filename "/tmp/test-XXXXXX"
+static const size_t blocksize = 0x100000;
 
 void* shared_malloc(size_t size) {
     void *mem;
     /* First reserve memory area */
     mem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    assert(mem != MAP_FAILED);
+    if(mem == MAP_FAILED) {
+        perror("mmap");
+        return NULL;
+    }
     int bogusfile;
     /* Create a fd to a new file on disk, make it blocksize big, and unlink it.
      * It still exists in memory but not in the file system (thus it cannot be leaked). */
@@ -66,11 +69,11 @@ int main(int argc, char *argv[]) {
     int mem_access  = atoi(argv[3]);
     uint8_t *buff   = allocate(size, shared);
     if(buff == NULL) {
-        printf("Error with allocation.");
+        printf("Error with allocation.\n");
         exit(1);
     }
-    if(mem_access)
-        memset(buff, 0, size);
+    for(int i = 0; i < mem_access; i++)
+        memset(buff, i, size);
     deallocate(buff, size, shared);
     return 0;
 }
