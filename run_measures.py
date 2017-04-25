@@ -64,7 +64,7 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        os.environ['TIME'] = '/usr/bin/time:output %S %U %F %R' # format for /usr/bin/time
+        os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R' # format for /usr/bin/time
         self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
 
