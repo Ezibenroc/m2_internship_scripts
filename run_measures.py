@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import sys
+import os
 import time
 import random
 from subprocess import Popen, PIPE
@@ -9,6 +10,7 @@ from math import sqrt
 import csv
 import argparse
 import itertools
+from collections import namedtuple
 from memstat import get_memory_usage
 from topology import IntSetParser, FatTreeParser
 
@@ -62,7 +64,8 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        self.default_args = ['smpirun', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
+        os.environ['TIME'] = '/usr/bin/time:output %S %U %F %R' # format for /usr/bin/time
+        self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
 
     def check_params(self):
@@ -76,7 +79,8 @@ class AbstractRunner:
         self.check_params()
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time', 'uss', 'rss'))
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time',
+            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'uss', 'rss'))
 
     @classmethod
     def parse_smpi(cls, output, args):
@@ -91,7 +95,17 @@ class AbstractRunner:
             print('Simgrid output was:')
             print(output.decode('utf-8'))
             sys.exit(1)
-        return simulation_time, application_time
+        last_line = output.split(b'\n')[-2]
+        values = last_line.split()
+        assert values[0] == b'/usr/bin/time:output' and len(values) == 5
+        return namedtuple('smpi_perf', ['sim_time', 'app_time', 'usr_time', 'sys_time', 'major_page_fault', 'minor_page_fault'])(
+            sim_time         = simulation_time,
+            app_time         = application_time,
+            usr_time         = float(values[1]),
+            sys_time         = float(values[2]),
+            major_page_fault = int(values[3]),
+            minor_page_fault = int(values[4])
+        )
 
     @staticmethod
     def get_max_memory(process_name, timeout):
@@ -117,7 +131,7 @@ class AbstractRunner:
             p.terminate()
             raise e
         output = p.communicate()
-        self.simulation_time, self.application_time = self.parse_smpi(output[1], args)
+        self.smpi_metrics = self.parse_smpi(output[1], args)
         process_exit_code = p.wait()
         assert process_exit_code == 0
         return output[0]
@@ -150,7 +164,9 @@ class AbstractRunner:
                     print('\t\tTimeoutError (size=%d nb_proc=%d)' % (size, nb_proc))
                     continue
                 self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops,
-                    self.simulation_time, self.application_time,
+                    self.smpi_metrics.sim_time, self.smpi_metrics.app_time,
+                    self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
+                    self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
                     self.uss, self.rss))
         self.sequel()
 
