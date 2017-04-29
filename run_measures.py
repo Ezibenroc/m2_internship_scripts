@@ -64,7 +64,7 @@ class AbstractRunner:
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
-        os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R' # format for /usr/bin/time
+        os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R %P' # format for /usr/bin/time
         self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
 
@@ -80,7 +80,7 @@ class AbstractRunner:
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time',
-            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'uss', 'rss'))
+            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss'))
 
     @classmethod
     def parse_smpi(cls, output, args):
@@ -97,19 +97,20 @@ class AbstractRunner:
             sys.exit(1)
         last_line = output.split(b'\n')[-2]
         values = last_line.split()
-        assert values[0] == b'/usr/bin/time:output' and len(values) == 5
-        return namedtuple('smpi_perf', ['sim_time', 'app_time', 'usr_time', 'sys_time', 'major_page_fault', 'minor_page_fault'])(
+        assert values[0] == b'/usr/bin/time:output' and len(values) == 6
+        return namedtuple('smpi_perf', ['sim_time', 'app_time', 'usr_time', 'sys_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization'])(
             sim_time         = simulation_time,
             app_time         = application_time,
             usr_time         = float(values[1]),
             sys_time         = float(values[2]),
             major_page_fault = int(values[3]),
-            minor_page_fault = int(values[4])
+            minor_page_fault = int(values[4]),
+            cpu_utilization = float(values[5][:-1])/100 # given in percentage, with '%'
         )
 
     @staticmethod
     def get_max_memory(process_name, timeout):
-        sleep_time = 0.1
+        sleep_time = 4
         uss, rss = 0, 0
         for i in range(int(timeout/sleep_time)):
             time.sleep(sleep_time)
@@ -167,6 +168,7 @@ class AbstractRunner:
                     self.smpi_metrics.sim_time, self.smpi_metrics.app_time,
                     self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
                     self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
+                    self.smpi_metrics.cpu_utilization,
                     self.uss, self.rss))
         self.sequel()
 
