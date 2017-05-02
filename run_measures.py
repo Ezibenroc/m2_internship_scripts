@@ -4,7 +4,7 @@ import sys
 import os
 import time
 import random
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, check_output, CalledProcessError
 import re
 from math import sqrt
 import csv
@@ -80,7 +80,7 @@ class AbstractRunner:
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time',
-            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss'))
+            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss', 'page_table_size'))
 
     @classmethod
     def parse_smpi(cls, output, args):
@@ -109,25 +109,49 @@ class AbstractRunner:
         )
 
     @staticmethod
-    def get_max_memory(process_name, timeout):
+    def get_pid(process_name):
+        result = check_output(['pidof', process_name]).split()
+        assert len(result) == 1
+        return int(result[0])
+
+    @staticmethod
+    def get_page_table_size(pid):
+        result = check_output(['grep', 'VmPTE', '/proc/%d/status'%pid]).split()
+        assert len(result) == 3
+        assert result[0] == b'VmPTE:'
+        assert result[2] == b'kB'
+        return int(result[1])*1000
+
+
+    @classmethod
+    def get_max_memory(cls, process_name, timeout):
         sleep_time = 4
-        uss, rss = 0, 0
+        uss, rss, page_table_size = 0, 0, 0
+        time.sleep(sleep_time/4)
+        try:
+            pid = cls.get_pid(process_name)
+        except CalledProcessError:
+            return uss, rss, page_table_size
         for i in range(int(timeout/sleep_time)):
-            time.sleep(sleep_time)
             mem_usage = get_memory_usage([process_name])
             if len(mem_usage) == 0:
-                return uss, rss
+                return uss, rss, page_table_size
             assert len(mem_usage) == 1
             mem_usage = mem_usage[0]
             uss = max(uss, mem_usage['uss'])
             rss = max(rss, mem_usage['rss'])
+            try:
+                page_table_size = max(page_table_size, cls.get_page_table_size(pid))
+            except CalledProcessError:
+                return uss, rss, page_table_size
+            time.sleep(sleep_time)
         raise TimeoutError
 
 
     def _run(self, args):
         p = Popen(args, stdout = PIPE, stderr = PIPE)
         try:
-            self.uss, self.rss = self.get_max_memory(self.exec_name, timeout=10*60)
+            self.uss, self.rss, self.page_table_size = self.get_max_memory(self.exec_name, timeout=10*60)
         except TimeoutError as e:
             p.terminate()
             raise e
@@ -169,7 +193,7 @@ class AbstractRunner:
                     self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
                     self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
                     self.smpi_metrics.cpu_utilization,
-                    self.uss, self.rss))
+                    self.uss, self.rss, self.page_table_size))
         self.sequel()
 
 class MatrixProduct(AbstractRunner):
