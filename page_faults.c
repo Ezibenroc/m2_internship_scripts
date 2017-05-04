@@ -6,6 +6,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef VERBOSE
+#define print(...) printf(__VA_ARGS__);
+#else
+#define print(...) {}
+#endif
+
 #define filename "/home/huge/test-XXXXXX"
 static const size_t blocksize = 1<<21;
 
@@ -13,12 +19,14 @@ void* shared_malloc(size_t size) {
     void *mem1;
     void *mem;
     /* First reserve memory area */
-    mem1 = mmap(NULL, size+blocksize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    mem1 = mmap(NULL, size+2*blocksize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    print("allocation: %p - %p\n", mem1, mem1+size+2*blocksize);
     if(mem1 == MAP_FAILED) {
         perror("mmap");
         return NULL;
     }
     mem = (void*)(((intptr_t)mem1+blocksize-1)&~(blocksize-1));
+    print("returned  : %p - %p\n", mem, mem+size);
     int bogusfile;
     /* Create a fd to a new file on disk, and unlink it.
      * It still exists in memory but not in the file system (thus it cannot be leaked). */
@@ -32,6 +40,7 @@ void* shared_malloc(size_t size) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
         void* res = mmap(pos, blocksize, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_HUGETLB,
                          bogusfile, 0);
+        print("mmap      : %p - %p\n", pos, pos+blocksize);
         if(res == MAP_FAILED) {
             perror("mmap2");
             return NULL;
@@ -41,9 +50,10 @@ void* shared_malloc(size_t size) {
     }
     if (size % blocksize) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
-        void* res = mmap(pos, size % blocksize, PROT_READ | PROT_WRITE,
+        void* res = mmap(pos, (size % blocksize), PROT_READ | PROT_WRITE,
                          MAP_FIXED | MAP_SHARED | MAP_POPULATE, bogusfile, 0);
         assert(res == pos);
+        print("mmap*     : %p - %p\n", pos, pos+blocksize+size%blocksize);
     }
     return mem;
 }
