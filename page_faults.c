@@ -6,35 +6,38 @@
 #include <stdint.h>
 #include <string.h>
 
-#define filename "/tmp/test-XXXXXX"
-static const size_t blocksize = 0x100000;
+#define filename "/home/huge/test-XXXXXX"
+static const size_t blocksize = 1<<21;
 
 void* shared_malloc(size_t size) {
+    void *mem1;
     void *mem;
     /* First reserve memory area */
-    mem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if(mem == MAP_FAILED) {
+    mem1 = mmap(NULL, size+blocksize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if(mem1 == MAP_FAILED) {
         perror("mmap");
         return NULL;
     }
+    mem = (void*)(((intptr_t)mem1+blocksize-1)&~(blocksize-1));
     int bogusfile;
-    /* Create a fd to a new file on disk, make it blocksize big, and unlink it.
+    /* Create a fd to a new file on disk, and unlink it.
      * It still exists in memory but not in the file system (thus it cannot be leaked). */
     char name[30];
     strcpy(name, filename);
     bogusfile = mkstemp(name);
     unlink(name);
-    char* dumb = (char*)calloc(1, blocksize);
-    ssize_t err = write(bogusfile, dumb, blocksize);
-    assert(err > 0);
-    free(dumb);
     unsigned int i;
     /* Map the bogus file in place of the anonymous memory */
     for (i = 0; i < size / blocksize; i++) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
-        void* res = mmap(pos, blocksize, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+        void* res = mmap(pos, blocksize, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_HUGETLB,
                          bogusfile, 0);
+        if(res == MAP_FAILED) {
+            perror("mmap2");
+            return NULL;
+        }
         assert(res == pos);
+        assert(res < mem1+size);
     }
     if (size % blocksize) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
