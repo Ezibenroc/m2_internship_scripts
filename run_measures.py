@@ -10,6 +10,7 @@ from math import sqrt
 import csv
 import argparse
 import itertools
+import psutil
 from collections import namedtuple
 from memstat import get_memory_usage
 from topology import IntSetParser, FatTreeParser
@@ -69,6 +70,7 @@ class AbstractRunner:
                 '--cfg=smpi/display-timing:yes', '--cfg=smpi/shared-malloc-blocksize:%d'%(1<<21), '-hostfile', self.host_file, '-platform', self.topo_file]
         if huge_page_mount is not None:
             self.default_args.append('--cfg=smpi/shared-malloc-hugepage:%s' % huge_page_mount)
+        self.initial_free_memory = psutil.virtual_memory().available
 
     def check_params(self):
         topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
@@ -82,7 +84,7 @@ class AbstractRunner:
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time',
-            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss', 'page_table_size'))
+            'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss', 'page_table_size', 'memory_size'))
 
     @classmethod
     def parse_smpi(cls, output, args):
@@ -125,27 +127,27 @@ class AbstractRunner:
         return int(result[1])*1000
 
 
-    @classmethod
-    def get_max_memory(cls, process_name, timeout):
+    def get_max_memory(self, process_name, timeout):
         sleep_time = 4
-        uss, rss, page_table_size = 0, 0, 0
+        uss, rss, page_table_size, memory_size = 0, 0, 0, 0
         time.sleep(sleep_time/4)
         try:
-            pid = cls.get_pid(process_name)
+            pid = self.get_pid(process_name)
         except CalledProcessError:
-            return uss, rss, page_table_size
+            return uss, rss, page_table_size, memory_size
         for i in range(int(timeout/sleep_time)):
+            memory_size = max(memory_size, self.initial_free_memory-psutil.virtual_memory().available)
             mem_usage = get_memory_usage([process_name])
             if len(mem_usage) == 0:
-                return uss, rss, page_table_size
+                return uss, rss, page_table_size, memory_size
             assert len(mem_usage) == 1
             mem_usage = mem_usage[0]
             uss = max(uss, mem_usage['uss'])
             rss = max(rss, mem_usage['rss'])
             try:
-                page_table_size = max(page_table_size, cls.get_page_table_size(pid))
+                page_table_size = max(page_table_size, self.get_page_table_size(pid))
             except CalledProcessError:
-                return uss, rss, page_table_size
+                return uss, rss, page_table_size, memory_size
             time.sleep(sleep_time)
         raise TimeoutError
 
@@ -153,7 +155,7 @@ class AbstractRunner:
     def _run(self, args):
         p = Popen(args, stdout = PIPE, stderr = PIPE)
         try:
-            self.uss, self.rss, self.page_table_size = self.get_max_memory(self.exec_name, timeout=10*60)
+            self.uss, self.rss, self.page_table_size, self.memory_size = self.get_max_memory(self.exec_name, timeout=10*60)
         except TimeoutError as e:
             p.terminate()
             raise e
@@ -195,7 +197,7 @@ class AbstractRunner:
                     self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
                     self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
                     self.smpi_metrics.cpu_utilization,
-                    self.uss, self.rss, self.page_table_size))
+                    self.uss, self.rss, self.page_table_size, self.memory_size))
         self.sequel()
 
 class MatrixProduct(AbstractRunner):
