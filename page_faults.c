@@ -15,25 +15,30 @@
 #define filename "/home/huge/test-XXXXXX"
 static const size_t blocksize = 1<<21;
 
+static int bogusfile=-1;
+static void *allocated_ptr = NULL;
+static size_t allocated_size = -1;
+
 void* shared_malloc(size_t size) {
-    void *mem1;
     void *mem;
     /* First reserve memory area */
-    mem1 = mmap(NULL, size+2*blocksize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    print("allocation: %p - %p\n", mem1, mem1+size+2*blocksize);
-    if(mem1 == MAP_FAILED) {
+    allocated_size = size+2*blocksize;
+    allocated_ptr = mmap(NULL, allocated_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    print("allocation: %p - %p\n", allocated_ptr, allocated_ptr+size+2*blocksize);
+    if(allocated_ptr == MAP_FAILED) {
         perror("mmap");
         return NULL;
     }
-    mem = (void*)(((intptr_t)mem1+blocksize-1)&~(blocksize-1));
+    mem = (void*)(((intptr_t)allocated_ptr+blocksize-1)&~(blocksize-1));
     print("returned  : %p - %p\n", mem, mem+size);
-    int bogusfile;
     /* Create a fd to a new file on disk, and unlink it.
      * It still exists in memory but not in the file system (thus it cannot be leaked). */
-    char name[30];
-    strcpy(name, filename);
-    bogusfile = mkstemp(name);
-    unlink(name);
+    if(bogusfile == -1) {
+        char name[30];
+        strcpy(name, filename);
+        bogusfile = mkstemp(name);
+        unlink(name);
+    }
     unsigned int i;
     /* Map the bogus file in place of the anonymous memory */
     for (i = 0; i < size / blocksize; i++) {
@@ -46,7 +51,7 @@ void* shared_malloc(size_t size) {
             return NULL;
         }
         assert(res == pos);
-        assert(res < mem1+size);
+        assert(res < allocated_ptr+size);
     }
     if (size % blocksize) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
@@ -66,8 +71,13 @@ void *allocate(size_t size, int shared) {
 }
 
 void deallocate(void *ptr, size_t size, int shared) {
-    if(shared)
-        munmap(ptr, size);
+    if(shared) {
+        if(munmap(allocated_ptr, allocated_size) < 0) {
+            perror("munmap_final");
+        }
+        allocated_size = -1;
+        allocated_ptr = NULL;
+    }
     else
         free(ptr);
 }
