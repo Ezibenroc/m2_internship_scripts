@@ -58,7 +58,7 @@ class AbstractRunner:
     application_time_str = b'(?P<application>%s) seconds were actual computation of the application' % float_string
     smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, huge_page_mount=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
@@ -66,7 +66,9 @@ class AbstractRunner:
         self.csv_file_name = csv_file_name
         os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R %P' # format for /usr/bin/time
         self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
-                '--cfg=smpi/display-timing:yes', '-hostfile', self.host_file, '-platform', self.topo_file]
+                '--cfg=smpi/display-timing:yes', '--cfg=smpi/shared-malloc-blocksize:%d'%(1<<21), '-hostfile', self.host_file, '-platform', self.topo_file]
+        if huge_page_mount is not None:
+            self.default_args.append('--cfg=smpi/shared-malloc-hugepage:%s' % huge_page_mount)
 
     def check_params(self):
         topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
@@ -298,6 +300,8 @@ if __name__ == '__main__':
             description='Experiment runner')
     parser.add_argument('-n', '--nb_runs', type=int,
             default=10, help='Number of experiments to perform.')
+    parser.add_argument('--hugepage', type=str,
+            default=None, help='Use huge pages, with the given hugetlbfs.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--size', type = lambda s: IntSetParser.parse(s),
             required=True, help='Sizes of the problem')
@@ -322,7 +326,7 @@ if __name__ == '__main__':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv)
+        runner = HPL(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.hugepage)
     else:
         assert False # unreachable
     runner.run_all()
