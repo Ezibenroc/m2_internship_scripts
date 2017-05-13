@@ -61,7 +61,7 @@ class AbstractRunner:
     smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, nb_cpu=None, huge_page_mount=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
@@ -76,6 +76,7 @@ class AbstractRunner:
             self.default_args.append('--cfg=plugin:Energy')
         self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
+        self.nb_cpu = nb_cpu
 
     def check_params(self):
         topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
@@ -284,6 +285,11 @@ class HPL(AbstractRunner):
         self.index = 0
 
     def get_P_Q(self, nb_proc):
+        if self.nb_cpu is not None:
+            assert nb_proc%self.nb_cpu == 0
+            P = self.nb_cpu
+            Q = int(nb_proc/self.nb_cpu)
+            return P, Q
         factors = primes(nb_proc)
         P, Q = 1, 1
         for fact in factors:
@@ -328,6 +334,8 @@ if __name__ == '__main__':
             required=True, help='Sizes of the problem')
     required_named.add_argument('--nb_proc', type = lambda s: IntSetParser.parse(s),
             required=True, help='Number of processes to use.')
+    parser.add_argument('--nb_cpu', type = int,
+            default=None, help='Hint for the number of CPU (e.g. value of P in HPL).')
     required_named.add_argument('--global_csv', type = str,
             required=True, help='Path of the global CSV file.')
     parser.add_argument('--local_csv', type = str,
@@ -347,7 +355,7 @@ if __name__ == '__main__':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage)
+        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.nb_cpu, args.hugepage)
     else:
         assert False # unreachable
     runner.run_all()
