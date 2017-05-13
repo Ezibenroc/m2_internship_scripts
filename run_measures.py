@@ -61,19 +61,21 @@ class AbstractRunner:
     smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, nb_cpu=None, huge_page_mount=None):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, nb_cpu=None, huge_page_mount=None, running_power=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
         os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R %P' # format for /usr/bin/time
-        self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/running-power:6217956542.969', '--cfg=smpi/privatize-global-variables:dlopen',
+        self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '--cfg=smpi/shared-malloc-blocksize:%d'%(1<<21), '-hostfile', self.host_file, '-platform', self.topo_file]
         if huge_page_mount is not None:
             self.default_args.append('--cfg=smpi/shared-malloc-hugepage:%s' % huge_page_mount)
         if energy:
             self.default_args.append('--cfg=plugin:Energy')
+        if running_power is not None:
+            self.default_args.append('--cfg=smpi/running-power:6217956542.969')
         self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
         self.nb_cpu = nb_cpu
@@ -336,6 +338,8 @@ if __name__ == '__main__':
             required=True, help='Number of processes to use.')
     parser.add_argument('--nb_cpu', type = int,
             default=None, help='Hint for the number of CPU (e.g. value of P in HPL).')
+    parser.add_argument('--running_power', type = float,
+            default=None, help='Running power of the host.')
     required_named.add_argument('--global_csv', type = str,
             required=True, help='Path of the global CSV file.')
     parser.add_argument('--local_csv', type = str,
@@ -355,7 +359,7 @@ if __name__ == '__main__':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.nb_cpu, args.hugepage)
+        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.nb_cpu, args.hugepage, args.running_power)
     else:
         assert False # unreachable
     runner.run_all()
