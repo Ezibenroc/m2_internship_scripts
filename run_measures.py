@@ -13,7 +13,7 @@ import itertools
 import psutil
 from collections import namedtuple
 from memstat import get_memory_usage
-from topology import IntSetParser, FatTreeParser
+from topology import IntSetParser, TopoParser
 
 HPL_dat_text = '''HPLinpack benchmark input file
 Innovative Computing Laboratory, University of Tennessee
@@ -57,9 +57,11 @@ class AbstractRunner:
     host_file = 'host.txt'
     simulation_time_str  = b'The simulation took (?P<simulation>%s) seconds \(after parsing and platform setup\)' % float_string
     application_time_str = b'(?P<application>%s) seconds were actual computation of the application' % float_string
+    energy_str           = b'Total energy consumption: (?P<total_energy>%s) Joules \(used hosts: (?P<used_energy>%s) Joules; unused/idle hosts: (?P<unused_energy>%s)\)' % ((float_string,)*3)
     smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
+    smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, huge_page_mount=None):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
@@ -70,6 +72,9 @@ class AbstractRunner:
                 '--cfg=smpi/display-timing:yes', '--cfg=smpi/shared-malloc-blocksize:%d'%(1<<21), '-hostfile', self.host_file, '-platform', self.topo_file]
         if huge_page_mount is not None:
             self.default_args.append('--cfg=smpi/shared-malloc-hugepage:%s' % huge_page_mount)
+        if energy:
+            self.default_args.append('--cfg=plugin:Energy')
+        self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
 
     def check_params(self):
@@ -83,15 +88,23 @@ class AbstractRunner:
         self.check_params()
         self.csv_file = open(self.csv_file_name, 'w')
         self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', 'simulation_time', 'application_time',
+        if self.energy:
+            energy_titles = ('total_energy', 'used_energy', 'unused_energy')
+        else:
+            energy_titles = tuple()
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', *energy_titles, 'simulation_time', 'application_time',
             'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss', 'page_table_size', 'memory_size'))
 
-    @classmethod
-    def parse_smpi(cls, output, args):
-        match = cls.smpi_reg.match(output)
+    def parse_smpi(self, output, args):
+        match = self.smpi_reg.match(output)
+        match_energy = self.smpi_energy_reg.match(output)
         try:
             simulation_time = float(match.group('simulation'))
             application_time = float(match.group('application'))
+            if self.energy:
+                total_energy = float(match_energy.group('total_energy'))
+                used_energy = float(match_energy.group('used_energy'))
+                unused_energy = float(match_energy.group('unused_energy'))
         except AttributeError:
             print('### ERROR ###')
             print('Command was:')
@@ -99,10 +112,14 @@ class AbstractRunner:
             print('Simgrid output was:')
             print(output.decode('utf-8'))
             sys.exit(1)
+        if self.energy:
+            self.energy_metrics = namedtuple('smpi_energy', ['total_energy', 'used_energy', 'unused_energy'])(total_energy, used_energy, unused_energy)
+        else:
+            self.energy_metrics = tuple()
         last_line = output.split(b'\n')[-2]
         values = last_line.split()
         assert values[0] == b'/usr/bin/time:output' and len(values) == 6
-        return namedtuple('smpi_perf', ['sim_time', 'app_time', 'usr_time', 'sys_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization'])(
+        self.smpi_metrics = namedtuple('smpi_perf', ['sim_time', 'app_time', 'usr_time', 'sys_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization'])(
             sim_time         = simulation_time,
             app_time         = application_time,
             usr_time         = float(values[1]),
@@ -160,7 +177,7 @@ class AbstractRunner:
             p.terminate()
             raise e
         output = p.communicate()
-        self.smpi_metrics = self.parse_smpi(output[1], args)
+        self.parse_smpi(output[1], args)
         process_exit_code = p.wait()
         assert process_exit_code == 0
         return output[0]
@@ -192,7 +209,7 @@ class AbstractRunner:
                 except TimeoutError:
                     print('\t\tTimeoutError (size=%d nb_proc=%d)' % (size, nb_proc))
                     continue
-                self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops,
+                self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops, *self.energy_metrics,
                     self.smpi_metrics.sim_time, self.smpi_metrics.app_time,
                     self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
                     self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
@@ -304,6 +321,8 @@ if __name__ == '__main__':
             default=10, help='Number of experiments to perform.')
     parser.add_argument('--hugepage', type=str,
             default=None, help='Use huge pages, with the given hugetlbfs.')
+    parser.add_argument('--energy', action='store_true',
+            help='Use the energy plugin.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--size', type = lambda s: IntSetParser.parse(s),
             required=True, help='Sizes of the problem')
@@ -313,7 +332,7 @@ if __name__ == '__main__':
             required=True, help='Path of the global CSV file.')
     parser.add_argument('--local_csv', type = str,
             help='Path of the local CSV file.')
-    required_named.add_argument('--fat_tree', type = lambda s: FatTreeParser.parse(s),
+    required_named.add_argument('--topo', type = lambda s: TopoParser.parse(s),
             required=True, help='Description of the fat tree(s).')
     required_named.add_argument('--experiment',
             required=True, help='The type of experiment to run.',
@@ -323,12 +342,12 @@ if __name__ == '__main__':
         if args.local_csv == None:
             sys.stderr.write('Error: no local CSV file given.\n')
             sys.exit(1)
-        runner = MatrixProduct(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
+        runner = MatrixProduct(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
     elif args.experiment == 'HPL':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.fat_tree, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.hugepage)
+        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage)
     else:
         assert False # unreachable
     runner.run_all()

@@ -1,6 +1,7 @@
 import functools
 import itertools
 from lxml import etree
+import os
 
 class ParseError(Exception):
     pass
@@ -75,6 +76,48 @@ class FatTreeParser(Parser):
         descriptors = itertools.product(*descriptors)
         return [FatTree(*t) for t in descriptors]
 
+class TopoParser(Parser):
+    @classmethod
+    def parse(cls, description):
+        if os.path.exists(description):
+            return [TopoFile(description)]
+        else:
+            return FatTreeParser.parse(description)
+
+class TopoFile:
+    def __init__(self, filepath):
+        self.filepath = filepath
+        try:
+            self.filename = filepath[filepath.rindex('/')+1:]
+        except ValueError:
+            self.filename = filepath
+        self.xml = etree.parse(filepath).getroot()
+
+    def dump_topology_file(self, file_name):
+        with open(file_name, 'wb') as f:
+            string = etree.tostring(self.xml, xml_declaration=True, pretty_print=True,
+                    doctype='<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">')
+            f.write(string)
+
+    def dump_host_file(self, file_name):
+        with open(file_name, 'w') as f:
+            for host in self.xml.findall('AS')[0].findall('host'):
+                hostname = host.get('id')
+                for core in range(int(host.get('core'))):
+                    f.write('%s\n' % hostname)
+
+    def __str__(self):
+        return 'file(%s)' % self.filename
+
+    def __repr__(self):
+        return str(self)
+
+    def nb_nodes(self):
+        hosts = self.xml.findall('AS')[0].findall('host')
+        return sum(int(h.get('core')) for h in hosts)
+
+    def nb_roots(self):
+        return -1
 
 class FatTree:
     prefix = 'host-'
