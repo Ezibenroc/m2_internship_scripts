@@ -58,7 +58,8 @@ class AbstractRunner:
     simulation_time_str  = b'The simulation took (?P<simulation>%s) seconds \(after parsing and platform setup\)' % float_string
     application_time_str = b'(?P<application>%s) seconds were actual computation of the application' % float_string
     energy_str           = b'Total energy consumption: (?P<total_energy>%s) Joules \(used hosts: (?P<used_energy>%s) Joules; unused/idle hosts: (?P<unused_energy>%s)\)' % ((float_string,)*3)
-    smpi_reg = re.compile(b'[\S\s]*%s\n%s' % (simulation_time_str, application_time_str))
+    full_time_str        = b'Simulated time: (?P<full_time>%s) seconds.' % float_string
+    smpi_reg = re.compile(b'[\S\s]*%s[\S\s]*%s\n%s' % (full_time_str, simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
     def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, nb_cpu=None, huge_page_mount=None, running_power=None):
@@ -95,7 +96,7 @@ class AbstractRunner:
             energy_titles = ('total_energy', 'used_energy', 'unused_energy')
         else:
             energy_titles = tuple()
-        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'time', 'Gflops', *energy_titles, 'simulation_time', 'application_time',
+        self.csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'full_time', 'time', 'Gflops', *energy_titles, 'simulation_time', 'application_time',
             'user_time', 'system_time', 'major_page_fault', 'minor_page_fault', 'cpu_utilization', 'uss', 'rss', 'page_table_size', 'memory_size'))
 
     def parse_smpi(self, output, args):
@@ -104,6 +105,7 @@ class AbstractRunner:
         try:
             simulation_time = float(match.group('simulation'))
             application_time = float(match.group('application'))
+            self.full_time = float(match.group('full_time'))
             if self.energy:
                 total_energy = float(match_energy.group('total_energy'))
                 used_energy = float(match_energy.group('used_energy'))
@@ -212,7 +214,7 @@ class AbstractRunner:
                 except TimeoutError:
                     print('\t\tTimeoutError (size=%d nb_proc=%d)' % (size, nb_proc))
                     continue
-                self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, time, flops, *self.energy_metrics,
+                self.csv_writer.writerow((topo, topo.nb_roots(), nb_proc, size, self.full_time, time, flops, *self.energy_metrics,
                     self.smpi_metrics.sim_time, self.smpi_metrics.app_time,
                     self.smpi_metrics.usr_time, self.smpi_metrics.sys_time,
                     self.smpi_metrics.major_page_fault, self.smpi_metrics.minor_page_fault,
