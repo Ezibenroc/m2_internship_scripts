@@ -92,6 +92,28 @@ class TopoFile:
         except ValueError:
             self.filename = filepath
         self.xml = etree.parse(filepath).getroot()
+        self.hostnames = self.parse_hosts()
+
+    def parse_hosts(self):
+        AS = self.xml.findall('AS')[0]
+        cluster = AS.findall('cluster')
+        host_list = []
+        if len(cluster) > 0:
+            assert len(cluster) == 1
+            cluster = cluster[0]
+            nb_cores = cluster.get('core', default=1)
+            prefix = cluster.get('prefix')
+            suffix = cluster.get('suffix')
+            radical = cluster.get('radical').split('-')
+            for i in range(int(radical[0]), int(radical[1])+1):
+                host_list.extend(['%s%d%s' % (prefix, i, suffix)]*int(nb_cores))
+        else:
+            for host in AS.findall('host'):
+                hostname = host.get('id')
+                nb_cores = host.get('core', default=1)
+                host_list.extend([hostname]*int(nb_cores))
+        return host_list
+
 
     def dump_topology_file(self, file_name):
         with open(file_name, 'wb') as f:
@@ -101,10 +123,8 @@ class TopoFile:
 
     def dump_host_file(self, file_name):
         with open(file_name, 'w') as f:
-            for host in self.xml.findall('AS')[0].findall('host'):
-                hostname = host.get('id')
-                for core in range(int(host.get('core'))):
-                    f.write('%s\n' % hostname)
+            for hostname in self.hostnames:
+                f.write('%s\n' % hostname)
 
     def __str__(self):
         return 'file(%s)' % self.filename
@@ -113,8 +133,7 @@ class TopoFile:
         return str(self)
 
     def nb_nodes(self):
-        hosts = self.xml.findall('AS')[0].findall('host')
-        return sum(int(h.get('core')) for h in hosts)
+        return len(self.hostnames)
 
     def nb_roots(self):
         return -1
