@@ -179,7 +179,7 @@ class AbstractRunner:
     def _run(self, args):
         p = Popen(args, stdout = PIPE, stderr = PIPE)
         try:
-            self.uss, self.rss, self.page_table_size, self.memory_size = self.get_max_memory(self.exec_name, timeout=60*60)
+            self.uss, self.rss, self.page_table_size, self.memory_size = self.get_max_memory(self.exec_name, timeout=10*60*60)
         except TimeoutError as e:
             p.terminate()
             raise e
