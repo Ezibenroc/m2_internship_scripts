@@ -171,6 +171,8 @@ class AbstractRunner:
             except CalledProcessError:
                 return uss, rss, page_table_size, memory_size
             time.sleep(sleep_time)
+        p = psutil.Process(pid)
+        p.kill()
         raise TimeoutError
 
 
