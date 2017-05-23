@@ -142,10 +142,11 @@ class FatTree:
     prefix = 'host-'
     suffix = '.hawaii.edu'
     speed = '1Gf'
-    bw = '125MBps'
-    lat = '50us'
-    loopback_bw = '100MBps'
-    loopback_lat = '0'
+    bw = '10Gbps'
+    lat = '2.4E-5s'
+    loopback_bw = '5120MiBps'
+    loopback_lat = '1.5E-9s'
+    core = '8'
 
     def __init__(self, down, up, parallel):
         def check_list(l):
@@ -202,6 +203,7 @@ class FatTree:
         cluster.set('lat', self.lat)
         cluster.set('loopback_bw', self.loopback_bw)
         cluster.set('loopback_lat', self.loopback_lat)
+        cluster.set('core', self.core)
         cluster.set('topology', 'FAT_TREE')
         cluster.set('topo_parameters', str(self))
         return etree.ElementTree(platform)
