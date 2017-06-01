@@ -132,7 +132,7 @@ class TopoFile:
     def __repr__(self):
         return str(self)
 
-    def nb_nodes(self):
+    def nb_cores(self):
         return len(self.hostnames)
 
     def nb_roots(self):
@@ -146,7 +146,7 @@ class FatTree:
     lat = '2.4E-5s'
     loopback_bw = '5120MiBps'
     loopback_lat = '1.5E-9s'
-    core = '8'
+    core = 8
 
     def __init__(self, down, up, parallel):
         def check_list(l):
@@ -182,6 +182,9 @@ class FatTree:
     def nb_nodes(self):
         return functools.reduce(lambda a, b: a*b, self.down, 1)
 
+    def nb_cores(self):
+        return self.nb_nodes() * self.core
+
     def nb_roots(self):
         return functools.reduce(lambda a, b: a*b, self.up, 1)
 
@@ -203,7 +206,7 @@ class FatTree:
         cluster.set('lat', self.lat)
         cluster.set('loopback_bw', self.loopback_bw)
         cluster.set('loopback_lat', self.loopback_lat)
-        cluster.set('core', self.core)
+        cluster.set('core', str(self.core))
         cluster.set('topology', 'FAT_TREE')
         cluster.set('topo_parameters', str(self))
         return etree.ElementTree(platform)
@@ -218,7 +221,8 @@ class FatTree:
         pattern = self.prefix + '%d' + self.suffix + '\n'
         with open(file_name, 'w') as f:
             for host_id in range(self.nb_nodes()):
-                f.write(pattern % host_id)
+                for core in range(self.core):
+                    f.write(pattern % host_id)
 
     def get_nodes_at_level(self, l):
         descriptors = []

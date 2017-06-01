@@ -82,10 +82,10 @@ class AbstractRunner:
         self.nb_cpu = nb_cpu
 
     def check_params(self):
-        topo_min_nodes = min(self.topologies, key = lambda t: t.nb_nodes())
-        min_nodes = topo_min_nodes.nb_nodes()
-        if min_nodes < max(self.nb_proc):
-            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_nodes, min_nodes, max(self.nb_proc)))
+        topo_min_cores = min(self.topologies, key = lambda t: t.nb_cores())
+        min_cores = topo_min_cores.nb_cores()
+        if min_cores < max(self.nb_proc):
+            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_cores, min_cores, max(self.nb_proc)))
             sys.exit(1)
 
     def prequel(self):
