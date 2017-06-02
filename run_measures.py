@@ -62,7 +62,7 @@ class AbstractRunner:
     smpi_reg = re.compile(b'[\S\s]*%s[\S\s]*%s\n%s' % (full_time_str, simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None, running_power=None):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None, running_power=None, shuffle_hosts=False):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
@@ -79,6 +79,7 @@ class AbstractRunner:
             self.default_args.append('--cfg=smpi/running-power:6217956542.969')
         self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
+        self.shuffle_hosts = shuffle_hosts
 
     def check_params(self):
         topo_min_cores = min(self.topologies, key = lambda t: t.nb_cores())
@@ -214,7 +215,7 @@ class AbstractRunner:
                 self.current_topo = topo
                 print('\tSub-iteration %d/%d' % (j+1, len(exp)))
                 topo.dump_topology_file(self.topo_file)
-                topo.dump_host_file(self.host_file)
+                topo.dump_host_file(self.host_file, self.shuffle_hosts)
                 try:
                     time, flops = self.run(nb_proc, topo.core, size)
                 except TimeoutError:
@@ -355,6 +356,8 @@ if __name__ == '__main__':
     required_named.add_argument('--experiment',
             required=True, help='The type of experiment to run.',
             choices = ['matrix_product', 'HPL'])
+    parser.add_argument('--shuffle_hosts', action='store_true',
+            help='Shuffle the host list, therefore giving a random mapping.')
     args = parser.parse_args()
     if args.experiment == 'matrix_product':
         if args.local_csv == None:
@@ -365,7 +368,7 @@ if __name__ == '__main__':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage, args.running_power)
+        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage, args.running_power, args.shuffle_hosts)
     else:
         assert False # unreachable
     runner.run_all()

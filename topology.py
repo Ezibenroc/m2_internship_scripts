@@ -2,6 +2,7 @@ import functools
 import itertools
 from lxml import etree
 import os
+import random
 
 class ParseError(Exception):
     pass
@@ -133,9 +134,12 @@ class TopoFile:
                     doctype='<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">')
             f.write(string)
 
-    def dump_host_file(self, file_name):
+    def dump_host_file(self, file_name, shuffle=False):
+        hostnames = list(self.hostnames)
+        if shuffle:
+            random.shuffle(hostnames)
         with open(file_name, 'w') as f:
-            for hostname in self.hostnames:
+            for hostname in hostnames:
                 f.write('%s\n' % hostname)
 
     def __str__(self):
@@ -229,12 +233,17 @@ class FatTree:
                     doctype='<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">')
             f.write(string)
 
-    def dump_host_file(self, file_name):
-        pattern = self.prefix + '%d' + self.suffix + '\n'
+    def dump_host_file(self, file_name, shuffle=False):
+        pattern = self.prefix + '%d' + self.suffix
+        hostnames = []
+        for host_id in range(self.nb_nodes()):
+            for core in range(self.core):
+                hostnames.append(pattern % host_id)
+        if shuffle:
+            random.shuffle(hostnames)
         with open(file_name, 'w') as f:
-            for host_id in range(self.nb_nodes()):
-                for core in range(self.core):
-                    f.write(pattern % host_id)
+            for hostname in hostnames:
+                f.write('%s\n' % hostname)
 
     def get_nodes_at_level(self, l):
         descriptors = []
