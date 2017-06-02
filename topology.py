@@ -62,19 +62,25 @@ class FatTreeParser(Parser):
     @classmethod
     def parse(cls, description):
         result = super().parse(description)
-        if len(result) != 4:
-            raise ParseError('A fat-tree description has exactly 4 parts.')
-        l, *descriptors = result
+        if len(result) == 4:
+            l, *descriptors = result
+            core = [[1]]
+        elif len(result) == 5:
+            l, *descriptors, core = result
+        else:
+            raise ParseError('A fat-tree description has exactly 4 parts (5 parts for the “extended” description).')
         if len(l) != 1 or len(l[0]) != 1:
             raise ParseError('The first part of a fat-tree description is an integer (number of levels).')
-        else:
-            l = l[0][0]
+        if len(core) != 1 or len(core[0]) != 1:
+            raise ParseError('The last part of a fat-tree description is an integer (number of cores).')
+        l = l[0][0]
+        core = core[0][0]
         if any(len(sub) != l for sub in descriptors):
             raise ParseError('One of the sub-lists has a length different than %d.' % l)
         for i in range(len(descriptors)):
             descriptors[i] = list(itertools.product(*descriptors[i]))
         descriptors = itertools.product(*descriptors)
-        return [FatTree(*t) for t in descriptors]
+        return [FatTree(*t, core=core) for t in descriptors]
 
 class TopoParser(Parser):
     @classmethod
@@ -92,6 +98,7 @@ class TopoFile:
         except ValueError:
             self.filename = filepath
         self.xml = etree.parse(filepath).getroot()
+        self.core = None
         self.hostnames = self.parse_hosts()
 
     def parse_hosts(self):
@@ -110,8 +117,13 @@ class TopoFile:
         else:
             for host in AS.findall('host'):
                 hostname = host.get('id')
-                nb_cores = host.get('core', default=1)
-                host_list.extend([hostname]*int(nb_cores))
+                nb_cores = int(host.get('core', default=1))
+                if self.core is None:
+                    self.core = nb_cores
+                else:
+                    if self.core != nb_cores:
+                        print('WARNING: heterogeneous number of cores (found %d and %d).' % (self.core, nb_cores))
+                host_list.extend([hostname]*nb_cores)
         return host_list
 
 
@@ -146,9 +158,8 @@ class FatTree:
     lat = '2.4E-5s'
     loopback_bw = '5120MiBps'
     loopback_lat = '1.5E-9s'
-    core = 8
 
-    def __init__(self, down, up, parallel):
+    def __init__(self, down, up, parallel, core):
         def check_list(l):
             for n in l:
                 assert isinstance(n, int) and n > 0
@@ -159,6 +170,7 @@ class FatTree:
         self.down = tuple(down)
         self.up = tuple(up)
         self.parallel = tuple(parallel)
+        self.core = core
 
     def __eq__(self, other):
         return self.down == other.down and\
@@ -168,7 +180,7 @@ class FatTree:
     def __hash__(self):
         return hash((self.down, self.up, self.parallel))
 
-    def __str__(self):
+    def standard_repr(self):
         def intlist_to_str(l):
             return ','.join(str(n) for n in l)
         down = intlist_to_str(self.down)
@@ -177,7 +189,7 @@ class FatTree:
         return ';'.join([str(len(self.down)), down, up, parallel])
 
     def __repr__(self):
-        return str(self)
+        return ';'.join([self.standard_repr(), str(self.core)])
 
     def nb_nodes(self):
         return functools.reduce(lambda a, b: a*b, self.down, 1)
@@ -208,7 +220,7 @@ class FatTree:
         cluster.set('loopback_lat', self.loopback_lat)
         cluster.set('core', str(self.core))
         cluster.set('topology', 'FAT_TREE')
-        cluster.set('topo_parameters', str(self))
+        cluster.set('topo_parameters', self.standard_repr())
         return etree.ElementTree(platform)
 
     def dump_topology_file(self, file_name):

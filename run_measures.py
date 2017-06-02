@@ -62,7 +62,7 @@ class AbstractRunner:
     smpi_reg = re.compile(b'[\S\s]*%s[\S\s]*%s\n%s' % (full_time_str, simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, nb_cpu=None, huge_page_mount=None, running_power=None):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None, running_power=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
@@ -79,14 +79,18 @@ class AbstractRunner:
             self.default_args.append('--cfg=smpi/running-power:6217956542.969')
         self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
-        self.nb_cpu = nb_cpu
 
     def check_params(self):
         topo_min_cores = min(self.topologies, key = lambda t: t.nb_cores())
         min_cores = topo_min_cores.nb_cores()
         if min_cores < max(self.nb_proc):
-            print('Error: more processes than nodes for at least one of the topologies (topology %s has  %d nodes, asked for %d processes).' % (topo_min_cores, min_cores, max(self.nb_proc)))
+            print('Error: more processes than cores for at least one of the topologies (topology %s has  %d cores, asked for %d processes).' % (topo_min_cores, min_cores, max(self.nb_proc)))
             sys.exit(1)
+        for nb_proc in self.nb_proc:
+            for topo in self.topologies:
+                if nb_proc % topo.core != 0:
+                    print('Error: the number of cores does not divide the number of processes for at least one of the topologies (topology %s has %d cores, asked for %d processes).' % (topo, topo.core, nb_proc))
+                    sys.exit(1)
 
     def prequel(self):
         self.check_params()
@@ -212,7 +216,7 @@ class AbstractRunner:
                 topo.dump_topology_file(self.topo_file)
                 topo.dump_host_file(self.host_file)
                 try:
-                    time, flops = self.run(nb_proc, size)
+                    time, flops = self.run(nb_proc, topo.core, size)
                 except TimeoutError:
                     print('\t\tTimeoutError (size=%d nb_proc=%d)' % (size, nb_proc))
                     continue
@@ -290,11 +294,11 @@ class HPL(AbstractRunner):
         super().__init__(*args)
         self.index = 0
 
-    def get_P_Q(self, nb_proc):
-        if self.nb_cpu is not None:
-            assert nb_proc%self.nb_cpu == 0
-            P = self.nb_cpu
-            Q = int(nb_proc/self.nb_cpu)
+    def get_P_Q(self, nb_proc, nb_core):
+        if nb_core != 1:
+            assert nb_proc%nb_core == 0
+            P = nb_core
+            Q = int(nb_proc/nb_core)
             return P, Q
         factors = primes(nb_proc)
         P, Q = 1, 1
@@ -305,15 +309,15 @@ class HPL(AbstractRunner):
                 Q *= fact
         return P, Q
 
-    def gen_hpl_file(self, nb_proc, size):
-        P, Q = self.get_P_Q(nb_proc)
+    def gen_hpl_file(self, nb_proc, nb_core, size):
+        P, Q = self.get_P_Q(nb_proc, nb_core)
         with open(self.HPL_file_name, 'w') as f:
             f.write(HPL_dat_text.format(P=P, Q=Q, size=size))
 
 
-    def run(self, nb_proc, size): # we parse the ugly output...
+    def run(self, nb_proc, nb_core, size): # we parse the ugly output...
         args = self.default_args + ['-np', str(nb_proc)] + ['../hpl-2.2/bin/SMPI/xhpl']
-        self.gen_hpl_file(nb_proc, size)
+        self.gen_hpl_file(nb_proc, nb_core, size)
         output_str = self._run(args)
         self.index += 1
         output = [sub.split() for sub in output_str.split(b'\n')]
@@ -340,8 +344,6 @@ if __name__ == '__main__':
             required=True, help='Sizes of the problem')
     required_named.add_argument('--nb_proc', type = lambda s: IntSetParser.parse(s),
             required=True, help='Number of processes to use.')
-    parser.add_argument('--nb_cpu', type = int,
-            default=None, help='Hint for the number of CPU (e.g. value of P in HPL).')
     parser.add_argument('--running_power', type = float,
             default=None, help='Running power of the host.')
     required_named.add_argument('--global_csv', type = str,
@@ -363,7 +365,7 @@ if __name__ == '__main__':
         if args.local_csv is not None:
             sys.stderr.write('Error: no need for a local CSV file.\n')
             sys.exit(1)
-        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.nb_cpu, args.hugepage, args.running_power)
+        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage, args.running_power)
     else:
         assert False # unreachable
     runner.run_all()
