@@ -14,3 +14,4 @@ mmap_error
 page_faults
 dtrsm_test
 dgemm_test
+network_test
