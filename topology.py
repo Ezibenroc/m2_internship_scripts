@@ -109,12 +109,12 @@ class TopoFile:
         if len(cluster) > 0:
             assert len(cluster) == 1
             cluster = cluster[0]
-            nb_cores = cluster.get('core', default=1)
+            self.core = int(cluster.get('core', default=1))
             prefix = cluster.get('prefix')
             suffix = cluster.get('suffix')
             radical = cluster.get('radical').split('-')
             for i in range(int(radical[0]), int(radical[1])+1):
-                host_list.extend(['%s%d%s' % (prefix, i, suffix)]*int(nb_cores))
+                host_list.extend(['%s%d%s' % (prefix, i, suffix)]*self.core)
         else:
             for host in AS.findall('host'):
                 hostname = host.get('id')

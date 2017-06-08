@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='ASCII'?>
+<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">
+<!--2-level fat-tree with 512 nodes-->
+<platform version="4">
+  <AS id="AS0" routing="Full">
+    <cluster id="cluster0" prefix="host-" suffix=".hawaii.edu" radical="0-511" speed="1Gf" bw="100Gbps" lat="2.4E-5s" loopback_bw="5120MiBps" loopback_lat="1.5E-9s" core="1" topology="FAT_TREE" topo_parameters="2;16,32;1,16;1,1"/>
+  </AS>
+</platform>
