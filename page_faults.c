@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/time.h>
+
 
 #ifdef VERBOSE
 #pragma message "VERBOSE: ON"
@@ -117,6 +119,9 @@ int main(int argc, char *argv[]) {
     int shared      = atoi(argv[1]);
     size_t size     = atol(argv[2]);
     int mem_access  = atoi(argv[3]);
+    struct timeval before = {};
+    struct timeval after = {};
+    gettimeofday(&before, NULL);\
     uint8_t *buff   = allocate(size, shared);
     if(buff == NULL) {
         printf("Error with allocation.\n");
@@ -125,5 +130,8 @@ int main(int argc, char *argv[]) {
     for(int i = 0; i < mem_access; i++)
         memset(buff, i, size);
     deallocate(buff, size, shared);
+    gettimeofday(&after, NULL);
+    double real_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);\
+    printf("%g\n", real_time);
     return 0;
 }

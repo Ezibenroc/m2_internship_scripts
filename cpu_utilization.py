@@ -20,7 +20,7 @@ if __name__ == '__main__':
     file_name = sys.argv[3]
     with open(file_name, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('shared', 'size', 'mem_access', 'system_time', 'user_time', 'nb_page_faults', 'cpu_utilization', 'memory_size'))
+        csv_writer.writerow(('shared', 'size', 'mem_access', 'system_time', 'user_time', 'total_time', 'nb_page_faults', 'cpu_utilization', 'memory_size'))
         exp_id = 0
         for exp in range(nb_exp):
             iterations = list(range(MAX_ITER))
@@ -28,5 +28,5 @@ if __name__ == '__main__':
             print('Experiment %d/%d' % (exp+1, nb_exp))
             size = random.randint(1, max_size)
             for nb_iter in iterations:
-                sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size = measure_page_faults(True, size, nb_iter)
-                csv_writer.writerow((True, size, nb_iter, sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size))
+                sys_time, usr_time, total_time, nb_page_faults, cpu_utilization, memory_size = measure_page_faults(True, size, nb_iter)
+                csv_writer.writerow((True, size, nb_iter, sys_time, usr_time, total_time, nb_page_faults, cpu_utilization, memory_size))
