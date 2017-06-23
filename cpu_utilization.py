@@ -9,6 +9,8 @@ from math import log, floor
 from itertools import product
 from page_faults import measure_page_faults
 
+MAX_ITER = 10
+
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print('Syntax: %s <nb_exp> <max_size> <CSV file>')
@@ -21,7 +23,10 @@ if __name__ == '__main__':
         csv_writer.writerow(('shared', 'size', 'mem_access', 'system_time', 'user_time', 'nb_page_faults', 'cpu_utilization', 'memory_size'))
         exp_id = 0
         for exp in range(nb_exp):
+            iterations = list(range(MAX_ITER))
+            random.shuffle(iterations)
             print('Experiment %d/%d' % (exp+1, nb_exp))
             size = random.randint(1, max_size)
-            sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size = measure_page_faults(True, size, True)
-            csv_writer.writerow((True, size, True, sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size))
+            for nb_iter in iterations:
+                sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size = measure_page_faults(True, size, nb_iter)
+                csv_writer.writerow((True, size, nb_iter, sys_time, usr_time, nb_page_faults, cpu_utilization, memory_size))
