@@ -37,10 +37,17 @@ def measure_page_faults(shared, size, mem_access):
     assert major == 0
     return sys_time, usr_time, total_time, minor, cpu_utilization, memory_size
 
+def compile_exec():
+    args = ['gcc', '-std=gnu11', '-ggdb3', '-O3', '-o', 'page_faults', 'page_faults.c', '-Wall']
+    print(' '.join(args))
+    p = Popen(args, stdout=DEVNULL, stderr=DEVNULL)
+    p.wait()
+
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print('Syntax: %s <nb_exp> <max_size> <CSV file>')
         sys.exit(1)
+    compile_exec()
     nb_exp = int(sys.argv[1])
     max_size = int(sys.argv[2])
     file_name = sys.argv[3]

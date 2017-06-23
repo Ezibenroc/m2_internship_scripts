@@ -7,7 +7,7 @@ import re
 import csv
 from math import log, floor
 from itertools import product
-from page_faults import measure_page_faults
+from page_faults import measure_page_faults, compile_exec
 
 MAX_ITER = 10
 
@@ -15,6 +15,7 @@ if __name__ == '__main__':
     if len(sys.argv) != 4:
         print('Syntax: %s <nb_exp> <max_size> <CSV file>')
         sys.exit(1)
+    compile_exec()
     nb_exp = int(sys.argv[1])
     max_size = int(sys.argv[2])
     file_name = sys.argv[3]
