@@ -16,15 +16,12 @@ if __name__ == '__main__':
     nb_exp = int(sys.argv[1])
     max_size = int(sys.argv[2])
     file_name = sys.argv[3]
-    experiments = [True, False]
     with open(file_name, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('shared', 'size', 'mem_access', 'system_time', 'user_time', 'nb_page_faults', 'cpu_utilization'))
         exp_id = 0
         for exp in range(nb_exp):
             print('Experiment %d/%d' % (exp+1, nb_exp))
-            random.shuffle(experiments)
             size = random.randint(1, max_size)
-            for mem_access in experiments:
-                sys_time, usr_time, nb_page_faults, cpu_utilization = measure_page_faults(True, size, mem_access)
-                csv_writer.writerow((True, size, mem_access, sys_time, usr_time, nb_page_faults, cpu_utilization))
+            sys_time, usr_time, nb_page_faults, cpu_utilization = measure_page_faults(True, size, True)
+            csv_writer.writerow((True, size, True, sys_time, usr_time, nb_page_faults, cpu_utilization))
