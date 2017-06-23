@@ -1,3 +1,8 @@
+// Compilation:
+// gcc -std=gnu11 -ggdb3 -O3 -o page_faults page_faults.c -Wall
+// Verbose mode  : add flag -DVERBOSE
+// Huge page mode: add flag -DHUGEPAGE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -7,12 +12,22 @@
 #include <string.h>
 
 #ifdef VERBOSE
+#pragma message "VERBOSE: ON"
 #define print(...) printf(__VA_ARGS__);
 #else
+#pragma message "VERBOSE: OFF"
 #define print(...) {}
 #endif
 
+
+#ifdef HUGEPAGE
+#pragma message "HUGEPAGE: ON"
 #define filename "/home/huge/test-XXXXXX"
+#else
+#pragma message "HUGEPAGE: OFF"
+#define filename "/tmp/test-XXXXXX"
+#endif
+
 static const size_t blocksize = 1<<21;
 
 static int bogusfile=-1;
@@ -37,13 +52,25 @@ void* shared_malloc(size_t size) {
         char name[30];
         strcpy(name, filename);
         bogusfile = mkstemp(name);
+#ifndef HUGEPAGE
+        char* dumb = (char*)calloc(1, blocksize);
+        ssize_t err = write(bogusfile, dumb, blocksize);
+        assert(err > 0);
+        free(dumb);
+#endif
         unlink(name);
     }
+    int flag;
+#ifdef HUGEPAGE
+    flag = MAP_FIXED | MAP_SHARED | MAP_HUGETLB;
+#else
+    flag = MAP_FIXED | MAP_SHARED;
+#endif
     unsigned int i;
     /* Map the bogus file in place of the anonymous memory */
     for (i = 0; i < size / blocksize; i++) {
         void* pos = (void*)((unsigned long)mem + i * blocksize);
-        void* res = mmap(pos, blocksize, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_HUGETLB,
+        void* res = mmap(pos, blocksize, PROT_READ | PROT_WRITE, flag,
                          bogusfile, 0);
         print("mmap      : %p - %p\n", pos, pos+blocksize);
         if(res == MAP_FAILED) {
