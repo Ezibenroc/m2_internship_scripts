@@ -9,7 +9,7 @@ from math import log, floor
 from itertools import product
 from page_faults import measure_page_faults, compile_exec
 
-MAX_ITER = 10
+MAX_ITER = 4
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
