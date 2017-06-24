@@ -64,9 +64,9 @@ void* shared_malloc(size_t size) {
     }
     int flag;
 #ifdef HUGEPAGE
-    flag = MAP_FIXED | MAP_SHARED | MAP_HUGETLB;
+    flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
 #else
-    flag = MAP_FIXED | MAP_SHARED;
+    flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE;
 #endif
     unsigned int i;
     /* Map the bogus file in place of the anonymous memory */
