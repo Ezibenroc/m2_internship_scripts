@@ -229,51 +229,6 @@ class AbstractRunner:
                     self.uss, self.rss, self.page_table_size, self.memory_size))
         self.sequel()
 
-class MatrixProduct(AbstractRunner):
-
-    local_time_string = 'rank\s*:\s*(?P<rank>{0})\s*\|\s*communication_time\s*:\s*(?P<communication_time>{0})\s*\|\s*computation_time\s*:\s*(?P<computation_time>{0})\n'.format(float_string)
-    global_time_string = 'number_procs\s*:\s*(?P<nb_proc>{0})\s*\|\s*matrix_size\s*:\s*(?P<matrix_size>{0})\s*\|\s*time\s*:\s*(?P<time>{0})\s*seconds\n'.format(float_string)
-    whole_string = '(?P<local>(%s)*)(?P<global>%s)' % (local_time_string, global_time_string)
-    local_regex = re.compile(local_time_string.encode())
-    regex = re.compile(whole_string.encode())
-
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, local_csv_file_name):
-        super().__init__(topologies, size, nb_proc, nb_runs, csv_file_name)
-        self.local_csv_file_name = local_csv_file_name
-
-    def check_params(self):
-        super().check_params()
-        for nb_proc in self.nb_proc:
-            sqrt_proc = int(sqrt(nb_proc))
-            if sqrt_proc*sqrt_proc != nb_proc:
-                print('Error: %d is not a square.' % nb_proc)
-                sys.exit(1)
-            for size in self.size:
-                if size%sqrt_proc != 0:
-                    print('Error: sqrt(%d) does not divide %d.' % (nb_proc, size))
-                    sys.exit(1)
-
-    def prequel(self):
-        super().prequel()
-        self.local_csv_file = open(self.local_csv_file_name, 'w')
-        self.local_csv_writer = csv.writer(self.local_csv_file)
-        self.local_csv_writer.writerow(('topology', 'nb_roots', 'nb_proc', 'size', 'rank', 'communication_time', 'computation_time'))
-
-    def run(self, nb_proc, size):
-        args = self.default_args + ['-np', str(nb_proc)] + ['./matmul', str(size)]
-        output_str = self._run(args)
-        match = self.regex.match(output_str)
-        for local in self.local_regex.finditer(match.group('local')): # would be very nice if we could explore the regex hierarchy instead of having to do another match...
-            self.local_csv_writer.writerow((self.current_topo, self.current_topo.nb_roots(), nb_proc, size,
-                int(local.group('rank')), float(local.group('communication_time')), float(local.group('computation_time'))))
-        time = float(match.group('time'))
-        flops = 2*self.size**3 / (time*10**9)
-        return time, flops
-
-    def sequel(self):
-        super().sequel()
-        self.local_csv_file.close()
-
 def primes(n):
 # From http://stackoverflow.com/questions/16996217/prime-factorization-list
     primfac = []
@@ -347,28 +302,12 @@ if __name__ == '__main__':
             required=True, help='Number of processes to use.')
     parser.add_argument('--running_power', type = float,
             default=None, help='Running power of the host.')
-    required_named.add_argument('--global_csv', type = str,
-            required=True, help='Path of the global CSV file.')
-    parser.add_argument('--local_csv', type = str,
-            help='Path of the local CSV file.')
+    required_named.add_argument('--csv_file', type = str,
+            required=True, help='Path of the CSV file for the results.')
     required_named.add_argument('--topo', type = lambda s: TopoParser.parse(s),
             required=True, help='Description of the fat tree(s).')
-    required_named.add_argument('--experiment',
-            required=True, help='The type of experiment to run.',
-            choices = ['matrix_product', 'HPL'])
     parser.add_argument('--shuffle_hosts', action='store_true',
             help='Shuffle the host list, therefore giving a random mapping.')
     args = parser.parse_args()
-    if args.experiment == 'matrix_product':
-        if args.local_csv == None:
-            sys.stderr.write('Error: no local CSV file given.\n')
-            sys.exit(1)
-        runner = MatrixProduct(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.local_csv)
-    elif args.experiment == 'HPL':
-        if args.local_csv is not None:
-            sys.stderr.write('Error: no need for a local CSV file.\n')
-            sys.exit(1)
-        runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.global_csv, args.energy, args.hugepage, args.running_power, args.shuffle_hosts)
-    else:
-        assert False # unreachable
+    runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.csv_file, args.energy, args.hugepage, args.running_power, args.shuffle_hosts)
     runner.run_all()
