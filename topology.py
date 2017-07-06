@@ -65,23 +65,17 @@ class FatTreeParser(Parser):
         result = super().parse(description)
         if len(result) == 4:
             l, *descriptors = result
-            core = [[1]]
-        elif len(result) == 5:
-            l, *descriptors, core = result
         else:
             raise ParseError('A fat-tree description has exactly 4 parts (5 parts for the “extended” description).')
         if len(l) != 1 or len(l[0]) != 1:
             raise ParseError('The first part of a fat-tree description is an integer (number of levels).')
-        if len(core) != 1 or len(core[0]) != 1:
-            raise ParseError('The last part of a fat-tree description is an integer (number of cores).')
         l = l[0][0]
-        core = core[0][0]
         if any(len(sub) != l for sub in descriptors):
             raise ParseError('One of the sub-lists has a length different than %d.' % l)
         for i in range(len(descriptors)):
             descriptors[i] = list(itertools.product(*descriptors[i]))
         descriptors = itertools.product(*descriptors)
-        return [FatTree(*t, core=core) for t in descriptors]
+        return [FatTree(*t) for t in descriptors]
 
 class TopoParser(Parser):
     @classmethod
@@ -154,16 +148,77 @@ class TopoFile:
     def nb_roots(self):
         return -1
 
+class AbstractSetting:
+    def __init__(self, value, unit=None):
+        self.value = value
+        self.unit = unit
+        self.check()
+
+    def get_value(self):
+        if self.unit is None:
+            return str(self.value)
+        else:
+            return '%s%s' % (self.value, self.unit)
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, self.get_value())
+
+    def check(self):
+        pass
+
+class BandwidthSetting(AbstractSetting):
+    def check(self):
+        assert self.unit in ['bps', 'kbps', 'kibps', 'Mbps', 'Mibps', 'Gbps', 'Gibps']
+        assert self.value > 0
+
+class LatencySetting(AbstractSetting):
+    def check(self):
+        assert self.unit in ['s']
+
+class CoreSpeedSetting(AbstractSetting):
+    def check(self):
+        assert self.unit in ['f', 'kf', 'Mf', 'Gf']
+        assert self.value > 0
+
+class CoreNumberSetting(AbstractSetting):
+    def check(self):
+        assert self.unit is None
+        assert self.value > 0
+
+class ClusterSetting:
+    def __init__(self, *, core_speed, core_number, remote_link_bandwidth, remote_link_latency,
+            local_link_bandwidth, local_link_latency):
+        self.core = core_number.value
+        self.parameters = {
+            'speed'         : core_speed,
+            'core'          : core_number,
+            'bw'            : remote_link_bandwidth,
+            'lat'           : remote_link_latency,
+            'loopback_bw'   : local_link_bandwidth,
+            'loopback_lat'  : local_link_latency,
+        }
+
+    def update_xml(self, etree):
+        for name, param in self.parameters.items():
+            etree.set(name, param.get_value())
+
+    def __repr__(self):
+        return str(self.parameters)
+
+default_topo = ClusterSetting(
+    core_speed              = CoreSpeedSetting(1, 'Gf'),
+    core_number             = CoreNumberSetting(1),
+    remote_link_bandwidth   = BandwidthSetting(10, 'Gbps'),
+    remote_link_latency     = LatencySetting(2.4E-5, 's'),
+    local_link_bandwidth    = BandwidthSetting(5120, 'Mibps'),
+    local_link_latency      = LatencySetting(1.5E-9, 's'),
+)
+
 class FatTree:
     prefix = 'host-'
     suffix = '.hawaii.edu'
-    speed = '1Gf'
-    bw = '10Gbps'
-    lat = '2.4E-5s'
-    loopback_bw = '5120MiBps'
-    loopback_lat = '1.5E-9s'
 
-    def __init__(self, down, up, parallel, core):
+    def __init__(self, down, up, parallel, topo_settings=default_topo):
         def check_list(l):
             for n in l:
                 assert isinstance(n, int) and n > 0
@@ -174,7 +229,7 @@ class FatTree:
         self.down = tuple(down)
         self.up = tuple(up)
         self.parallel = tuple(parallel)
-        self.core = core
+        self.topo_settings = topo_settings
 
     def __eq__(self, other):
         return self.down == other.down and\
@@ -198,6 +253,10 @@ class FatTree:
     def nb_nodes(self):
         return functools.reduce(lambda a, b: a*b, self.down, 1)
 
+    @property
+    def core(self):
+        return self.topo_settings.core
+
     def nb_cores(self):
         return self.nb_nodes() * self.core
 
@@ -217,14 +276,9 @@ class FatTree:
         cluster.set('prefix', self.prefix)
         cluster.set('suffix', self.suffix)
         cluster.set('radical', '0-%d' % (self.nb_nodes()-1))
-        cluster.set('speed', self.speed)
-        cluster.set('bw', self.bw)
-        cluster.set('lat', self.lat)
-        cluster.set('loopback_bw', self.loopback_bw)
-        cluster.set('loopback_lat', self.loopback_lat)
-        cluster.set('core', str(self.core))
         cluster.set('topology', 'FAT_TREE')
         cluster.set('topo_parameters', self.standard_repr())
+        self.topo_settings.update_xml(cluster)
         return etree.ElementTree(platform)
 
     def dump_topology_file(self, file_name):
