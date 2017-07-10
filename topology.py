@@ -166,6 +166,12 @@ class AbstractSetting:
     def check(self):
         pass
 
+    def __hash__(self):
+        return hash((self.value, self.unit))
+
+    def __eq__(self, other):
+        return type(self) == type(other) and self.value == other.value and self.unit == other.unit
+
 class BandwidthSetting(AbstractSetting):
     def check(self):
         assert self.unit in ['bps', 'kbps', 'kibps', 'Mbps', 'Mibps', 'Gbps', 'Gibps']
