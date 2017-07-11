@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 import sys
 import csv
 import random
@@ -91,7 +91,8 @@ def run_all_dtrsm(csv_file, nb_exp):
 
 def compile_generic(exec_filename):
     c_filename = exec_filename + '.c'
-    run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
+    #run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
+    run_command(['icc', c_filename, '-mkl', '-O3', '-o', exec_filename])
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:

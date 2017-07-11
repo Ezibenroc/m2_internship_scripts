@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <cblas.h>
+#include <mkl_cblas.h>
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>

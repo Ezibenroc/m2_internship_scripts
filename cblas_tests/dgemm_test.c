@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <cblas.h>
+#include <mkl_cblas.h>
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>
@@ -56,18 +56,25 @@ int main(int argc, char* argv[])
     double *C = allocate_matrix(m, n, lead_C);
 
 	double alpha = 1.;
-	double beta = 0.;
+	double beta = 1.;
 
     struct timeval before = {};
     struct timeval after = {};
 
+    struct timespec ts;
+    struct timespec ts2;
     gettimeofday(&before, NULL);
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, m, n, k, alpha, A, lead_A, B, lead_B, beta, C, lead_C);
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts2);
     gettimeofday(&after, NULL);
 
     double total_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);
 
+    double process_time = ((double)ts2.tv_sec - (double)ts.tv_sec + ((double)ts2.tv_nsec / 1e9) - ((double)ts.tv_nsec / 1e9));
+
     printf("%f\n", total_time);
+    printf("Process: %f\n", process_time);
 
     free_matrix(A);
     free_matrix(B);
