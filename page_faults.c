@@ -1,7 +1,19 @@
 // Compilation:
-// gcc -std=gnu11 -ggdb3 -O3 -o page_faults page_faults.c -Wall
+// gcc -std=gnu11 -O3 -o page_faults page_faults.c -Wall
 // Verbose mode  : add flag -DVERBOSE
 // Huge page mode: add flag -DHUGEPAGE
+
+// Settings:
+// sudo sysctl -w vm.max_map_count=40000000
+// sudo sysctl -w vm.overcommit_memory=1
+
+// Huge page settings:
+// mkdir /tmp/huge
+// sudo mount none /tmp/huge -t hugetlbfs -o rw,mode=0777
+// sudo sh -c 'echo 1 >> /proc/sys/vm/nr_hugepages'
+
+// Test the shared malloc with a size of 1000000 bytes and 7 writes to the whole buffer:
+// ./page_faults 1 1000000 7
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +36,7 @@
 
 #ifdef HUGEPAGE
 #pragma message "HUGEPAGE: ON"
-#define filename "/home/huge/test-XXXXXX"
+#define filename "/tmp/huge/test-XXXXXX"
 #else
 #pragma message "HUGEPAGE: OFF"
 #define filename "/tmp/test-XXXXXX"
