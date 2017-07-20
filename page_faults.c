@@ -1,7 +1,6 @@
 // Compilation:
 // gcc -std=gnu11 -O3 -o page_faults page_faults.c -Wall
 // Verbose mode  : add flag -DVERBOSE
-// Huge page mode: add flag -DHUGEPAGE
 
 // Settings:
 // sudo sysctl -w vm.max_map_count=40000000
@@ -34,13 +33,8 @@
 #endif
 
 
-#ifdef HUGEPAGE
-#pragma message "HUGEPAGE: ON"
-#define filename "/tmp/huge/test-XXXXXX"
-#else
-#pragma message "HUGEPAGE: OFF"
+#define huge_filename "/tmp/huge/test-XXXXXX"
 #define filename "/tmp/test-XXXXXX"
-#endif
 
 static const size_t blocksize = 1<<21;
 
@@ -48,7 +42,7 @@ static int bogusfile=-1;
 static void *allocated_ptr = NULL;
 static size_t allocated_size = -1;
 
-void* shared_malloc(size_t size) {
+void* shared_malloc(size_t size, int hugepage) {
     void *mem;
     /* First reserve memory area */
     allocated_size = size+2*blocksize;
@@ -64,22 +58,24 @@ void* shared_malloc(size_t size) {
      * It still exists in memory but not in the file system (thus it cannot be leaked). */
     if(bogusfile == -1) {
         char name[30];
-        strcpy(name, filename);
+        if(hugepage)
+            strcpy(name, huge_filename);
+        else
+            strcpy(name, filename);
         bogusfile = mkstemp(name);
-#ifndef HUGEPAGE
-        char* dumb = (char*)calloc(1, blocksize);
-        ssize_t err = write(bogusfile, dumb, blocksize);
-        assert(err > 0);
-        free(dumb);
-#endif
+        if(!hugepage) {
+            char* dumb = (char*)calloc(1, blocksize);
+            ssize_t err = write(bogusfile, dumb, blocksize);
+            assert(err > 0);
+            free(dumb);
+        }
         unlink(name);
     }
     int flag;
-#ifdef HUGEPAGE
-    flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
-#else
-    flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE;
-#endif
+    if(hugepage)
+        flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE | MAP_HUGETLB;
+    else
+        flag = MAP_FIXED | MAP_SHARED | MAP_POPULATE;
     unsigned int i;
     /* Map the bogus file in place of the anonymous memory */
     for (i = 0; i < size / blocksize; i++) {
@@ -104,9 +100,9 @@ void* shared_malloc(size_t size) {
     return mem;
 }
 
-void *allocate(size_t size, int shared) {
+void *allocate(size_t size, int shared, int hugepage) {
     if(shared)
-        return shared_malloc(size);
+        return shared_malloc(size, hugepage);
     else
         return malloc(size);
 }
@@ -124,17 +120,18 @@ void deallocate(void *ptr, size_t size, int shared) {
 }
 
 int main(int argc, char *argv[]) {
-    if(argc != 4) {
-        printf("Syntax: %s <shared_allocation> <allocation_size> <mem_access>", argv[0]);
+    if(argc != 5) {
+        printf("Syntax: %s <shared_allocation> <allocation_size> <mem_access> <huge_page>", argv[0]);
         exit(1);
     }
     int shared      = atoi(argv[1]);
     size_t size     = atol(argv[2]);
     int mem_access  = atoi(argv[3]);
+    int hugepage   = atoi(argv[4]);
     struct timeval before = {};
     struct timeval after = {};
     gettimeofday(&before, NULL);\
-    uint8_t *buff   = allocate(size, shared);
+    uint8_t *buff   = allocate(size, shared, hugepage);
     if(buff == NULL) {
         printf("Error with allocation.\n");
         exit(1);
