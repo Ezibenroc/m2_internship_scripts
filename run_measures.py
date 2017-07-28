@@ -22,7 +22,7 @@ HPL.out      output file name (if any)
 1            # of problems sizes (N)
 {size}       # default: 29 30 34 35  Ns
 1            # default: 1            # of NBs
-120          # 1 2 3 4      NBs
+1024          # 1 2 3 4      NBs
 0            PMAP process mapping (0=Row-,1=Column-major)
 1            # of process grids (P x Q)
 {P}          Ps
@@ -62,12 +62,15 @@ class AbstractRunner:
     smpi_reg = re.compile(b'[\S\s]*%s[\S\s]*%s\n%s' % (full_time_str, simulation_time_str, application_time_str))
     smpi_energy_reg = re.compile(b'[\S\s]*%s' % energy_str)
 
-    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None, running_power=None, shuffle_hosts=False):
+    def __init__(self, topologies, size, nb_proc, nb_runs, csv_file_name, energy=False, huge_page_mount=None, running_power=None, shuffle_hosts=False, P_Q=None):
         self.topologies = topologies
         self.size = size
         self.nb_proc = nb_proc
         self.nb_runs = nb_runs
         self.csv_file_name = csv_file_name
+        if P_Q is not None:
+            assert len(nb_proc) == 1 and len(P_Q) == 2 and nb_proc[0] == P_Q[0] * P_Q[1]
+        self.P_Q = P_Q
         os.environ['TIME'] = '/usr/bin/time:output %U %S %F %R %P' # format for /usr/bin/time
         self.default_args = ['smpirun', '-wrapper', '/usr/bin/time', '--cfg=smpi/privatize-global-variables:dlopen',
                 '--cfg=smpi/display-timing:yes', '--cfg=smpi/shared-malloc-blocksize:%d'%(1<<21), '-hostfile', self.host_file, '-platform', self.topo_file]
@@ -157,7 +160,7 @@ class AbstractRunner:
     def get_max_memory(self, process_name, timeout):
         sleep_time = 4
         uss, rss, page_table_size, memory_size = 0, 0, 0, 0
-        time.sleep(sleep_time/4)
+        time.sleep(sleep_time)
         try:
             pid = self.get_pid(process_name)
         except CalledProcessError:
@@ -251,6 +254,8 @@ class HPL(AbstractRunner):
         self.index = 0
 
     def get_P_Q(self, nb_proc, nb_core):
+        if self.P_Q is not None:
+            return self.P_Q
         if nb_core != 1:
             assert nb_proc%nb_core == 0
             P = nb_core
@@ -286,6 +291,10 @@ class HPL(AbstractRunner):
         flops = float(sub[-1])
         return time, flops
 
+def int_pair(string):
+    a, b = (int(n) for n in string.split(','))
+    return a, b
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Experiment runner')
@@ -298,8 +307,10 @@ if __name__ == '__main__':
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--size', type = lambda s: IntSetParser.parse(s),
             required=True, help='Sizes of the problem')
-    required_named.add_argument('--nb_proc', type = lambda s: IntSetParser.parse(s),
-            required=True, help='Number of processes to use.')
+    parser.add_argument('--nb_proc', type = lambda s: IntSetParser.parse(s),
+            default=None, help='Number of processes to use.')
+    parser.add_argument('--P_Q', type = int_pair,
+            default=None, help='Values to use for P and Q.')
     parser.add_argument('--running_power', type = float,
             default=None, help='Running power of the host.')
     required_named.add_argument('--csv_file', type = str,
@@ -309,5 +320,9 @@ if __name__ == '__main__':
     parser.add_argument('--shuffle_hosts', action='store_true',
             help='Shuffle the host list, therefore giving a random mapping.')
     args = parser.parse_args()
-    runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.csv_file, args.energy, args.hugepage, args.running_power, args.shuffle_hosts)
+    if (args.nb_proc is None and args.P_Q is None) or (args.nb_proc is not None and args.P_Q is not None):
+        parser.error('Exactly one of --nb_proc and --P_Q is required.')
+    if args.P_Q is not None:
+        args.nb_proc = [args.P_Q[0] * args.P_Q[1]]
+    runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.csv_file, args.energy, args.hugepage, args.running_power, args.shuffle_hosts, args.P_Q)
     runner.run_all()
