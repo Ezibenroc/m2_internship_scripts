@@ -2,6 +2,7 @@
 
 import unittest
 from topology import *
+from experiment import AbstractSettings
 
 def outlist_to_descr(out_l):
     return Parser.out_separator.join(inlist_to_descr(in_l) for in_l in out_l)
@@ -83,6 +84,38 @@ class TestFatTreeParser(unittest.TestCase):
             FatTreeParser.parse('2;1,5;1;1,5')          # wrong size of sublist
         with self.assertRaises(ParseError):
             FatTreeParser.parse('2;1,5;1,5;1')          # wrong size of sublist
+
+class Mockup(AbstractSettings):
+    attributes = {'foo': int, 'bar': str}
+
+class TestExperiment(unittest.TestCase):
+
+
+    def test_basic(self):
+        exp = Mockup(foo=42, bar='bla')
+        self.assertIn(42, exp.foo)
+        self.assertIn('bla', exp.bar)
+        exp = Mockup(foo=[27, 42], bar='bla')
+        self.assertIn(42, exp.foo)
+        self.assertIn(27, exp.foo)
+        self.assertIn('bla', exp.bar)
+        exp = Mockup(foo=42, bar=['bla', 'bli'])
+        self.assertIn(42, exp.foo)
+        self.assertIn('bla', exp.bar)
+        self.assertIn('bli', exp.bar)
+        with self.assertRaises(AttributeError):
+            exp = Mockup()
+        with self.assertRaises(AttributeError):
+            exp = Mockup(foo=42)
+        with self.assertRaises(AttributeError):
+            exp = Mockup(bar='bla')
+        with self.assertRaises(AttributeError):
+            exp = Mockup(foo='bla', bar='bla')
+        with self.assertRaises(AttributeError):
+            exp = Mockup(foo=['bla'], bar='bla')
+        with self.assertRaises(AttributeError):
+            exp = Mockup(foo=42, bar=[42])
+
 
 if __name__ == '__main__':
     unittest.main()
