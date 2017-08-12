@@ -88,8 +88,10 @@ class TestFatTreeParser(unittest.TestCase):
 class Mockup(AbstractSettings):
     attributes = {'foo': int, 'bar': str}
 
-class TestExperiment(unittest.TestCase):
+class BigMockup(AbstractSettings):
+    attributes = {'toto': Mockup, 'tata': int}
 
+class TestExperiment(unittest.TestCase):
 
     def test_basic(self):
         exp = Mockup(foo=42, bar='bla')
@@ -124,6 +126,13 @@ class TestExperiment(unittest.TestCase):
         self.assertIn(Mockup(foo=42, bar='bli'), prod)
         self.assertIn(Mockup(foo=27, bar='bla'), prod)
         self.assertIn(Mockup(foo=27, bar='bli'), prod)
+
+    def test_get_names_values(self):
+        exp = BigMockup(toto=Mockup(foo=42, bar='bla'), tata=27)
+        names = exp.get_names()
+        self.assertEqual(names, ['tata', 'bar', 'foo'])
+        values = exp.get_values()
+        self.assertEqual(values, [27, 'bla', 42])
 
 if __name__ == '__main__':
     unittest.main()

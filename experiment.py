@@ -35,6 +35,24 @@ class AbstractSettings:
         prod = [dict(attr) for attr in prod]
         return [self.__class__(**attr) for attr in prod]
 
+    def collect(self, func):
+        l = []
+        for name in sorted(self.attributes):
+            attribute = self.__getattribute__(name)
+            assert len(attribute) == 1
+            attribute = attribute[0]
+            try:
+                l.extend(attribute.collect(func))
+            except AttributeError:
+                l.append(func(name, attribute))
+        return l
+
+    def get_names(self):
+        return self.collect(lambda name, _: name)
+
+    def get_values(self):
+        return self.collect(lambda _, attribute: attribute)
+
 class Cluster(AbstractSettings):
     '''
         All the attributes have to be given in standard units (e.g. bandwidth in bps, not Mbps).
