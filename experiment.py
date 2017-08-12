@@ -1,3 +1,5 @@
+import itertools
+
 class AbstractSettings:
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -18,6 +20,20 @@ class AbstractSettings:
 
     def __repr__(self):
         return '%s(%s)' % (self.__class__.__name__, ', '.join(('%s=%s' % (key, self.__getattribute__(key))) for key in self.attributes))
+
+    def __eq__(self, other):
+        if self.attributes != other.attributes:
+            return False
+        for attr in self.attributes:
+            if set(self.__getattribute__(attr)) != set(other.__getattribute__(attr)):
+                return False
+        return True
+
+    def product(self):
+        attributes = [[(attr, val) for val in self.__getattribute__(attr)] for attr in self.attributes]
+        prod = itertools.product(*attributes)
+        prod = [dict(attr) for attr in prod]
+        return [self.__class__(**attr) for attr in prod]
 
 class Cluster(AbstractSettings):
     '''

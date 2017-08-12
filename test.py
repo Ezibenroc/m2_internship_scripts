@@ -116,6 +116,14 @@ class TestExperiment(unittest.TestCase):
         with self.assertRaises(AttributeError):
             exp = Mockup(foo=42, bar=[42])
 
+    def test_product(self):
+        exp = Mockup(foo=[42, 27], bar=['bla', 'bli'])
+        prod = exp.product()
+        self.assertEqual(len(prod), 4)
+        self.assertIn(Mockup(foo=42, bar='bla'), prod)
+        self.assertIn(Mockup(foo=42, bar='bli'), prod)
+        self.assertIn(Mockup(foo=27, bar='bla'), prod)
+        self.assertIn(Mockup(foo=27, bar='bli'), prod)
 
 if __name__ == '__main__':
     unittest.main()
