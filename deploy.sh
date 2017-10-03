@@ -32,7 +32,7 @@ for i in $*; do (
 	run_command $i 'wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && yes | apt install python3-dev && pip3 install lxml psutil pandas statsmodels'
 	run_command $i 'cd simgrid && mkdir build && cd build && cmake -Denable_documentation=OFF .. && make -j 32 && make install'
 	run_command $i 'cd hpl* && sed -ri "s|TOPdir\s*=.+|TOPdir="`pwd`"|g" Make.SMPI && make startup arch=SMPI && make SMPI_OPTS="-DSMPI_OPTIMIZATION -DSMPI_DGEMM_COEFFICIENT=1.029e-11 -DSMPI_DGEMM_PHI_COEFFICIENT=1.981e-12 -DSMPI_DTRSM_COEFFICIENT=9.882e-12 -DSMPI_DTRSM_PHI_COEFFICIENT=1.954e-12" arch=SMPI'
-	run_command $i 'sysctl -w vm.overcommit_memory=1 && sysctl -w vm.max_map_count=40000000'
+	run_command $i 'sysctl -w vm.overcommit_memory=1 && sysctl -w vm.max_map_count=2000000000'
 	run_command $i 'mkdir -p /root/huge && mount none /root/huge -t hugetlbfs -o rw,mode=0777 && echo 1 >> /proc/sys/vm/nr_hugepages'
 	echo "Stop compiling on host $i"
 )&
