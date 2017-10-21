@@ -183,7 +183,7 @@ class LatencySetting(AbstractSetting):
 
 class CoreSpeedSetting(AbstractSetting):
     def check(self):
-        assert self.unit in ['f', 'kf', 'Mf', 'Gf']
+        assert self.unit in [None, 'f', 'kf', 'Mf', 'Gf']
         assert self.value > 0
 
 class CoreNumberSetting(AbstractSetting):
@@ -212,7 +212,7 @@ class ClusterSetting:
         return str(self.parameters)
 
 default_topo = ClusterSetting(
-    core_speed              = CoreSpeedSetting(1, 'Gf'),
+    core_speed              = CoreSpeedSetting(1000),
     core_number             = CoreNumberSetting(1),
     remote_link_bandwidth   = BandwidthSetting(10, 'Gbps'),
     remote_link_latency     = LatencySetting(2.4E-5, 's'),
@@ -274,6 +274,10 @@ class FatTree:
         platform.set('version', '4')
         platform.addprevious(etree.Comment('%d-level fat-tree with %d nodes' %
             (len(self.down), self.nb_nodes())))
+        config = etree.SubElement(platform, 'config')
+        prop = etree.SubElement(config, 'prop')
+        prop.set('id', 'smpi/running-power')
+        prop.set('value', '1000')
         AS = etree.SubElement(platform, 'AS')
         AS.set('id', 'AS0')
         AS.set('routing', 'Full') # TODO may need to change routing

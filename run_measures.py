@@ -78,8 +78,6 @@ class AbstractRunner:
             self.default_args.append('--cfg=smpi/shared-malloc-hugepage:%s' % huge_page_mount)
         if energy:
             self.default_args.append('--cfg=plugin:Energy')
-        if running_power is not None:
-            self.default_args.append('--cfg=smpi/running-power:6217956542.969')
         self.energy = energy
         self.initial_free_memory = psutil.virtual_memory().available
         self.shuffle_hosts = shuffle_hosts
