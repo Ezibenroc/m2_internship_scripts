@@ -40,7 +40,7 @@ HPL.out      output file name (if any)
 5            BCASTs (0=1rg,1=1rM,2=2rg,3=2rM,4=Lng,5=LnM)
 1            # of lookahead depth
 0            DEPTHs (>=0)
-0            SWAP (0=bin-exch,1=long,2=mix)
+1            SWAP (0=bin-exch,1=long,2=mix)
 64           swapping threshold
 1            L1 in (0=transposed,1=no-transposed) form
 1            U  in (0=transposed,1=no-transposed) form
