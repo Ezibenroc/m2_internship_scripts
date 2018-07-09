@@ -191,7 +191,7 @@ def compile_generic(exec_filename, lib, block_size=128, likwid=None):
         'mkl2': ['/opt/intel/bin/icc', '-DUSE_MKL', c_filename, 'common_matrix.c', '-fopenmp', '-I', '/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/include',
 		'/opt/intel/mkl/lib/intel64/libmkl_rt.so', '-O3', '-o', exec_filename, *options], # an ugly command for a non-standard library location
         'atlas': ['gcc', '-DUSE_ATLAS', c_filename, 'common_matrix.c', '-fopenmp', '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename, *options],
-        'openblas': ['gcc', '-DUSE_OPENBLAS', c_filename, 'common_matrix.c', '-fopenmp', '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename, *options],
+        'openblas': ['gcc', '-DUSE_OPENBLAS', c_filename, 'common_matrix.c', '-fopenmp', '-I', '/tmp/include', '/tmp/lib/libopenblas.so', '-O3', '-o', exec_filename, *options],
         'naive': ['gcc', '-DBLOCK_SIZE=%d' % block_size, *options, '-std=c99', '-fopenmp', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename, *options],
     }
     try:

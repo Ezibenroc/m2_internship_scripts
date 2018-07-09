@@ -18,3 +18,4 @@ dgemm_test
 network_test
 multi_dgemm
 test_matmul
+.mypy_cache
