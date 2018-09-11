@@ -1,3 +1,6 @@
 [submodule "cblas_tests/intercoolr"]
 	path = cblas_tests/intercoolr
 	url = https://github.com/Ezibenroc/intercoolr.git
+[submodule "smemstat_src"]
+	path = smemstat_src
+	url = git@github.com:ColinIanKing/smemstat.git
