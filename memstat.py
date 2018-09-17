@@ -17,7 +17,7 @@ def mem_to_human(size):
             return '%.3f %s' % (size/s, units[s])
 
 def get_memory_usage(process_names):
-    process = Popen(['./smemstat', '-q', '-o', TMP_FILE, '-p', ','.join(process_names)])
+    process = Popen(['smemstat', '-q', '-o', TMP_FILE, '-p', ','.join(process_names)])
     assert process.wait() == 0
     with open(TMP_FILE, 'r') as f:
         result = json.load(f)
