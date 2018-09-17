@@ -22,29 +22,29 @@ HPL.out      output file name (if any)
 1            # of problems sizes (N)
 {size}       # default: 29 30 34 35  Ns
 1            # default: 1            # of NBs
-1024          # 1 2 3 4      NBs
-1            PMAP process mapping (0=Row-,1=Column-major)
+128          # 1 2 3 4      NBs
+0            PMAP process mapping (0=Row-,1=Column-major)
 1            # of process grids (P x Q)
 {P}          Ps
 {Q}          Qs
 16.0         threshold
 1            # of panel fact
-2        PFACTs (0=left, 1=Crout, 2=Right)
+1        PFACTs (0=left, 1=Crout, 2=Right)
 1            # of recursive stopping criterium
-4          NBMINs (>= 1)
+2          NBMINs (>= 1)
 1            # of panels in recursion
 2            NDIVs
 1            # of recursive panel fact.
-1        RFACTs (0=left, 1=Crout, 2=Right)
+2        RFACTs (0=left, 1=Crout, 2=Right)
 1            # of broadcast
-5            BCASTs (0=1rg,1=1rM,2=2rg,3=2rM,4=Lng,5=LnM)
+2            BCASTs (0=1rg,1=1rM,2=2rg,3=2rM,4=Lng,5=LnM)
 1            # of lookahead depth
-0            DEPTHs (>=0)
-1            SWAP (0=bin-exch,1=long,2=mix)
-64           swapping threshold
-1            L1 in (0=transposed,1=no-transposed) form
-1            U  in (0=transposed,1=no-transposed) form
-0            Equilibration (0=no,1=yes)
+1            DEPTHs (>=0)
+0            SWAP (0=bin-exch,1=long,2=mix)
+128           swapping threshold
+0            L1 in (0=transposed,1=no-transposed) form
+0            U  in (0=transposed,1=no-transposed) form
+1            Equilibration (0=no,1=yes)
 8            memory alignment in double (> 0)
 '''
 
@@ -90,7 +90,7 @@ class AbstractRunner:
             sys.exit(1)
         for nb_proc in self.nb_proc:
             for topo in self.topologies:
-                if nb_proc % topo.core != 0:
+                if nb_proc % topo.core != 0 and nb_proc != 1:
                     print('Error: the number of cores does not divide the number of processes for at least one of the topologies (topology %s has %d cores, asked for %d processes).' % (topo, topo.core, nb_proc))
                     sys.exit(1)
 
