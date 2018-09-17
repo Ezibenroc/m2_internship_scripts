@@ -289,8 +289,14 @@ class HPL(AbstractRunner):
         flops = float(sub[-1])
         return time, flops
 
+
 def int_pair(string):
     a, b = (int(n) for n in string.split(','))
+    return a, b
+
+
+def float_pair(string):
+    a, b = (float(n) for n in string.split(','))
     return a, b
 
 if __name__ == '__main__':
@@ -317,10 +323,18 @@ if __name__ == '__main__':
             required=True, help='Description of the fat tree(s).')
     parser.add_argument('--shuffle_hosts', action='store_true',
             help='Shuffle the host list, therefore giving a random mapping.')
+    required_named.add_argument('--dgemm', type=float_pair, required=True,
+            help='Pair <coefficient, intercept> for the simulation of dgemm.')
+    required_named.add_argument('--dtrsm', type=float_pair, required=True,
+            help='Pair <coefficient, intercept> for the simulation of dtrsm.')
     args = parser.parse_args()
     if (args.nb_proc is None and args.P_Q is None) or (args.nb_proc is not None and args.P_Q is not None):
         parser.error('Exactly one of --nb_proc and --P_Q is required.')
     if args.P_Q is not None:
         args.nb_proc = [args.P_Q[0] * args.P_Q[1]]
     runner = HPL(args.topo, args.size, args.nb_proc, args.nb_runs, args.csv_file, args.energy, args.hugepage, args.running_power, args.shuffle_hosts, args.P_Q)
+    os.environ['SMPI_DGEMM_COEFFICIENT'] = str(args.dgemm[0])
+    os.environ['SMPI_DGEMM_INTERCEPT']   = str(args.dgemm[1])
+    os.environ['SMPI_DTRSM_COEFFICIENT'] = str(args.dtrsm[0])
+    os.environ['SMPI_DTRSM_INTERCEPT']   = str(args.dtrsm[1])
     runner.run_all()
